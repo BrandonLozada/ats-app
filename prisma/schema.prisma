@@ -6,3 +6,385 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+//////////////////////////////
+// AUTH (Better Auth)
+//////////////////////////////
+
+model User {
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email    String  @unique
+  password String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relación opcional con Candidate
+  candidate Candidate? @relation("UserCandidate")
+
+  jobsPosted JobPosting[]
+
+  @@map("users")
+}
+
+//////////////////////////////
+// CANDIDATE (CORE)
+//////////////////////////////
+
+model Candidate {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  name      String
+  firstName String  @map("first_name")
+  lastName  String? @map("last_name")
+  email     String? @unique
+  phone     String?
+
+  // Estado y calidad
+  status CandidateStatus @default(ACTIVE)
+
+  sourceId String?            @map("source_id") @db.Uuid
+  source   ApplicationSource? @relation("CandidateSource", fields: [sourceId], references: [id])
+
+  // CV estructurado (fase futura IA)
+  cvUrl        String?   @map("cv_url")
+  cvRaw        String?   @map("cv_raw") // markdown o yaml
+  cvParsedData Json?     @map("cv_parsed_data")
+  cvParsedAt   DateTime? @map("cv_parsedAt")
+
+  dataCompleteness Int @default(0) @map("data_completeness")
+
+  // Soft delete
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // Relaciones
+  userId String? @unique @map("user_id") @db.Uuid
+  user   User?   @relation("UserCandidate", fields: [userId], references: [id])
+
+  leads        CandidateLead[]
+  applications Application[]
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("candidates")
+}
+
+//////////////////////////////
+// LEADS (CAPTACIÓN)
+//////////////////////////////
+
+model CandidateLead {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  candidateId String    @map("candidate_id") @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id])
+
+  sourceId String            @map("source_id") @db.Uuid
+  source   ApplicationSource @relation("LeadSource", fields: [sourceId], references: [id])
+
+  notes String?
+
+  status LeadStatus @default(NEW)
+
+  convertedAt DateTime? @map("converted_at")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("candidate_leads")
+}
+
+//////////////////////////////
+// APPLICATION (POSTULACIÓN)
+//////////////////////////////
+
+model Application {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  candidateId  String @map("candidate_id") @db.Uuid
+  jobPostingId String @map("job_posting_id") @db.Uuid
+
+  sourceId String?            @map("source_id") @db.Uuid
+  source   ApplicationSource? @relation("ApplicationSourceRelation", fields: [sourceId], references: [id])
+
+  status    ApplicationStatus @default(APPLIED)
+  appliedAt DateTime          @default(now()) @map("applied_at")
+
+  notes String?
+
+  candidate  Candidate  @relation(fields: [candidateId], references: [id])
+  jobPosting JobPosting @relation(fields: [jobPostingId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([candidateId, jobPostingId])
+  @@map("applications")
+}
+
+//////////////////////////////
+// APPLICATION SOURCE (ORIGEN)
+//////////////////////////////
+
+model ApplicationSource {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  name String
+  type SourceType
+
+  isActive Boolean @default(true) @map("is_Active")
+
+  leads        CandidateLead[] @relation("LeadSource")
+  applications Application[]   @relation("ApplicationSourceRelation")
+  candidates   Candidate[]     @relation("CandidateSource")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("application_sources")
+}
+
+//////////////////////////////
+// JOB POSTING (SEO READY)
+//////////////////////////////
+
+model JobPosting {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  // Contenido principal
+  title            String
+  slug             String  @unique
+  description      String  @db.Text
+  responsibilities String? @db.Text
+  requirements     String? @db.Text
+  benefits         String? @db.Text
+
+  // SEO
+  metaTitle       String? @map("meta_title")
+  metaDescription String? @map("meta_description")
+  noIndex         Boolean @default(false) @map("no_index")
+
+  // Clasificación
+  categoryId String      @map("category_id") @db.Uuid
+  category   JobCategory @relation(fields: [categoryId], references: [id])
+
+  departmentId String?     @map("department_id") @db.Uuid
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  // Tipo de empleo (Google Jobs)
+  employmentType EmploymentType @map("employment_type")
+
+  // Seniority (NUEVO)
+  seniorityLevel SeniorityLevel? @map("seniority_level")
+
+  // Salario (SEO + Google Jobs)
+  salaryMin      Decimal? @map("salary_min")
+  salaryMax      Decimal? @map("salary_max")
+  salaryCurrency String?  @map("salary_currency")
+
+  // Aplicación (CRÍTICO Google Jobs)
+  applyUrl String? @map("apply_url") // si es externo
+
+  // Ubicación
+  isRemote Boolean @default(false) @map("is_remote")
+
+  // Estado del proceso
+  status JobStatus @default(DRAFT)
+
+  // Control de posiciones
+  totalPositions  Int? @map("total_positions")
+  positionsFilled Int  @default(0) @map("positions_filled")
+
+  createdById String? @map("created_by_id") @db.Uuid
+  createdBy   User?   @relation(fields: [createdById], references: [id])
+
+  // Fechas (CRÍTICAS SEO)
+  publishedAt  DateTime? @map("published_at")
+  validThrough DateTime? @map("valid_through")
+
+  // Organización
+  organizationId String?       @map("organization_id") @db.Uuid
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
+  // Auditoría
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relaciones
+  branches     JobPostingBranch[]
+  applications Application[]
+
+  @@map("job_postings")
+}
+
+//////////////////////////////
+//  DEPARTMENT
+//////////////////////////////
+
+model Department {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  name String
+  slug String @unique
+
+  // Jerarquía (hospital real)
+  parentId String?      @map("parent_id") @db.Uuid
+  parent   Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id])
+  children Department[] @relation("DepartmentHierarchy")
+
+  isActive Boolean @default(true) @map("is_active")
+
+  jobPostings JobPosting[]
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("departments")
+}
+
+//////////////////////////////
+//  ORGANIZATION
+//////////////////////////////
+
+model Organization {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  name    String
+  website String?
+  logoUrl String? @map("logo_url")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  jobPostings JobPosting[]
+
+  @@map("organizations")
+}
+
+//////////////////////////////
+// BRANCH
+//////////////////////////////
+
+model Branch {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  name String
+
+  street     String?
+  city       String
+  state      String
+  postalCode String? @map("postal_code")
+  country    String
+
+  latitude  Float?
+  longitude Float?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  jobPostings JobPostingBranch[]
+
+  @@map("branches")
+}
+
+model JobPostingBranch {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  jobPostingId String @map("job_posting_id") @db.Uuid
+  branchId     String @map("branch_id") @db.Uuid
+
+  jobPosting JobPosting @relation(fields: [jobPostingId], references: [id])
+  branch     Branch     @relation(fields: [branchId], references: [id])
+
+  @@unique([jobPostingId, branchId])
+  @@map("job_posting_branches")
+}
+
+//////////////////////////////
+// JOB CATEGORY
+//////////////////////////////
+
+model JobCategory {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  name String
+  slug String @unique
+
+  // SEO
+  metaTitle       String? @map("meta_title")
+  metaDescription String? @map("meta_description")
+
+  jobPostings JobPosting[]
+
+  @@map("job_categories")
+}
+
+//////////////////////////////
+// ENUMS
+//////////////////////////////
+
+enum CandidateStatus {
+  ACTIVE // usable, candidato válido
+  INACTIVE // oculto, incompleto / no útil
+  ARCHIVED // histórico, viejo pero útil para métricas
+  BLACKLISTED // rechazado definitivo, no volver a contactar
+
+  @@map("candidate_status")
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  DISQUALIFIED
+  CONVERTED
+
+  @@map("lead_status")
+}
+
+enum ApplicationStatus {
+  APPLIED
+  REVIEWING
+  INTERVIEW
+  REJECTED
+  HIRED
+
+  @@map("application_status")
+}
+
+enum SourceType {
+  INTERNAL
+  EXTERNAL
+  SOCIAL
+  REFERRAL
+
+  @@map("source_types")
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACTOR
+  TEMPORARY
+  INTERN
+  VOLUNTEER
+  PER_DIEM
+
+  @@map("employment_types")
+}
+
+enum SeniorityLevel {
+  INTERN
+  JUNIOR
+  MID
+  SENIOR
+  LEAD
+  MANAGER
+  DIRECTOR
+
+  @@map("seniority_levels")
+}
+
+enum JobStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+
+  @@map("job_status")
+}
