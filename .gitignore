@@ -46,3 +46,6 @@ next-env.d.ts
 # data
 /data
 /data/*
+
+# scripts
+/scripts/examples
