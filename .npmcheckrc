@@ -1,0 +1,5 @@
+{
+  "depcheck": {
+    "ignoreMatches": ["@prisma/client", "tailwind-animations", "tailwindcss", "tw-animate-css", "@radix-ui/react-tabs", "@radix-ui/react-separator"]
+  }
+}
