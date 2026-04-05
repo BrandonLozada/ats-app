@@ -1,0 +1,7 @@
+export const env = {
+  APP_NAME: process.env.NEXT_PUBLIC_APP_NAME,
+  SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+  COMPANY_NAME: process.env.NEXT_PUBLIC_COMPANY_NAME,
+  COMPANY_DOMAIN: process.env.NEXT_PUBLIC_COMPANY_DOMAIN,
+  EMAIL_DOMAIN: process.env.NEXT_PUBLIC_EMAIL_SERVER_DOMAIN,
+} as const;
