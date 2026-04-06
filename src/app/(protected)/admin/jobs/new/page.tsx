@@ -1,4 +1,4 @@
-import { CreateJobForm } from "../components/create-job-form";
+import { CreateJobForm } from "./components/create-job-form";
 import { getCategoryOptionsList } from "@/application/job-posting/queries/get-category-options.query";
 import { getDepartmentOptionsList } from "@/application/job-posting/queries/get-department-options.query";
 import { getPipelineOptionsList } from "@/application/job-posting/queries/get-pipeline-options.query";
