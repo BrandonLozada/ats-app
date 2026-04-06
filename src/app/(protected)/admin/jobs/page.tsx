@@ -1,8 +1,8 @@
 import { JobClient } from "./components/client";
-import { getJobPostingsItems } from "@/application/job-posting/queries/get-job-postings-items.query";
+import { getJobItems } from "@/application/job-posting/queries/get-job-items.query";
 
 export default async function JobsPage() {
-  const jobs = await getJobPostingsItems();
+  const jobs = await getJobItems();
 
   return (
     <div className="flex-col">
