@@ -10,7 +10,8 @@ type AuditAction =
   | "INTERVIEW_SCHEDULED"
   | "APPLY"
   | "LOGIN"
-  | "OTHER";
+  | "OTHER"
+  | "PUBLISH";
 
 interface AuditLogParams {
   entity: string;
