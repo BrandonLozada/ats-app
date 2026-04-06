@@ -21,3 +21,17 @@ export interface JobDetailUI {
   alreadyApplied: boolean;
   alreadySaved: boolean;
 }
+
+export interface JobForFormUI {
+  id: string;
+
+  title: string;
+  slug: string;
+  description: string;
+
+  categoryId: string;
+  departmentId: string | null;
+  pipelineId: string;
+
+  employmentType: string;
+}

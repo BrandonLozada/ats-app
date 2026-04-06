@@ -12,6 +12,8 @@ import {
   IconFrame,
   IconChartPie,
   IconMap,
+  IconBriefcase,
+  IconSitemap,
 } from "@tabler/icons-react";
 
 import { NavMain } from "./nav-main";
@@ -52,108 +54,128 @@ const data = {
   ],
   navMain: [
     {
-      title: "Playground",
-      url: "#",
-      icon: <IconTerminal2 />,
+      title: "Empleos",
+      url: "/admin/jobs",
+      icon: <IconBriefcase />,
       isActive: true,
       items: [
         {
-          title: "History",
-          url: "#",
+          title: "Nueva vacante",
+          url: "/admin/jobs/new",
         },
         {
-          title: "Starred",
-          url: "#",
+          title: "Vacantes",
+          url: "/admin/jobs",
         },
         {
-          title: "Settings",
+          title: "Archivadas",
           url: "#",
         },
       ],
     },
-    {
-      title: "Models",
-      url: "#",
-      icon: <IconRobot />,
-      items: [
-        {
-          title: "Genesis",
-          url: "#",
-        },
-        {
-          title: "Explorer",
-          url: "#",
-        },
-        {
-          title: "Quantum",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Documentation",
-      url: "#",
-      icon: <IconBook />,
-      items: [
-        {
-          title: "Introduction",
-          url: "#",
-        },
-        {
-          title: "Get Started",
-          url: "#",
-        },
-        {
-          title: "Tutorials",
-          url: "#",
-        },
-        {
-          title: "Changelog",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Settings",
-      url: "#",
-      icon: <IconSettings />,
-      items: [
-        {
-          title: "General",
-          url: "#",
-        },
-        {
-          title: "Team",
-          url: "#",
-        },
-        {
-          title: "Billing",
-          url: "#",
-        },
-        {
-          title: "Limits",
-          url: "#",
-        },
-      ],
-    },
+    // {
+    //   title: "Playground",
+    //   url: "#",
+    //   icon: <IconTerminal2 />,
+    //   isActive: true,
+    //   items: [
+    //     {
+    //       title: "History",
+    //       url: "#",
+    //     },
+    //     {
+    //       title: "Starred",
+    //       url: "#",
+    //     },
+    //     {
+    //       title: "Settings",
+    //       url: "#",
+    //     },
+    //   ],
+    // },
+    // {
+    //   title: "Models",
+    //   url: "#",
+    //   icon: <IconRobot />,
+    //   items: [
+    //     {
+    //       title: "Genesis",
+    //       url: "#",
+    //     },
+    //     {
+    //       title: "Explorer",
+    //       url: "#",
+    //     },
+    //     {
+    //       title: "Quantum",
+    //       url: "#",
+    //     },
+    //   ],
+    // },
+    // {
+    //   title: "Documentation",
+    //   url: "#",
+    //   icon: <IconBook />,
+    //   items: [
+    //     {
+    //       title: "Introduction",
+    //       url: "#",
+    //     },
+    //     {
+    //       title: "Get Started",
+    //       url: "#",
+    //     },
+    //     {
+    //       title: "Tutorials",
+    //       url: "#",
+    //     },
+    //     {
+    //       title: "Changelog",
+    //       url: "#",
+    //     },
+    //   ],
+    // },
+    // {
+    //   title: "Settings",
+    //   url: "#",
+    //   icon: <IconSettings />,
+    //   items: [
+    //     {
+    //       title: "General",
+    //       url: "#",
+    //     },
+    //     {
+    //       title: "Team",
+    //       url: "#",
+    //     },
+    //     {
+    //       title: "Billing",
+    //       url: "#",
+    //     },
+    //     {
+    //       title: "Limits",
+    //       url: "#",
+    //     },
+    //   ],
+    // },
   ],
-  projects: [
-    {
-      name: "Design Engineering",
-      url: "#",
-      icon: <IconFrame />,
-    },
-    {
-      name: "Sales & Marketing",
-      url: "#",
-      icon: <IconChartPie />,
-    },
-    {
-      name: "Travel",
-      url: "#",
-      icon: <IconMap />,
-    },
-  ],
+  // projects: [
+  //   {
+  //     name: "Design Engineering",
+  //     url: "#",
+  //     icon: <IconFrame />,
+  //   },
+  //   {
+  //     name: "Sales & Marketing",
+  //     url: "#",
+  //     icon: <IconChartPie />,
+  //   },
+  //   {
+  //     name: "Travel",
+  //     url: "#",
+  //     icon: <IconMap />,
+  //   },
+  // ],
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -164,7 +186,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
+        {/* <NavProjects projects={data.projects} /> */}
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={data.user} />
