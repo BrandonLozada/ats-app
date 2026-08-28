@@ -24,12 +24,10 @@ export function CellAction({ data }: CellActionProps) {
     toast.success("Job ID copiado al portapapeles.");
   };
 
-  // TODO: Implementar la función de eliminación de vacante.
   async function onDelete(id: string) {
     try {
       setLoading(true);
       await deleteJobAction({ id });
-      console.log("\nID: ", id);
       toast.success("Vacante eliminado correctamente.");
       router.refresh();
     } catch (error) {

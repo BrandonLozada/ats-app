@@ -1,21 +1,6 @@
 import { z } from "zod";
 
-export const EmploymentType = z.enum(
-  [
-    "FULL_TIME",
-    "PART_TIME",
-    "CONTRACTOR",
-    "TEMPORARY",
-    "INTERN",
-    "VOLUNTEER",
-    "PER_DIEM",
-  ],
-  { message: "Selecciona un tipo válido." },
-);
-
-// TODO: Cambiar de nombre a createJobDraftFormSchema o algo similar,
-//       ya que este formulario se usará para creación para la ruta /admin/jobs/new.
-export const createJobFormSchema = z.object({
+export const updateJobFormSchema = z.object({
   title: z
     .string()
     .min(3, { message: "El título debe tener al menos 3 caracteres." })
@@ -30,12 +15,10 @@ export const createJobFormSchema = z.object({
 
   description: z
     .string()
-    .min(10, { message: "La descripción debe tener al menos 10 caracteres." })
+    .min(5, { message: "La descripción debe tener al menos 5 caracteres." })
     .max(500, {
       message: "La descripción no puede exceder los 500 caracteres.",
     }),
-
-  employmentType: EmploymentType,
 
   categoryId: z.uuid({ message: "Selecciona una categoría válida." }),
 
@@ -44,6 +27,21 @@ export const createJobFormSchema = z.object({
     .optional(),
 
   pipelineId: z.uuid({ message: "Selecciona un pipeline válido." }),
+
+  employmentType: z.enum(
+    [
+      "FULL_TIME",
+      "PART_TIME",
+      "CONTRACTOR",
+      "TEMPORARY",
+      "INTERN",
+      "VOLUNTEER",
+      "PER_DIEM",
+    ],
+    { message: "Selecciona un tipo de contexto válido." },
+  ),
 });
 
-export type CreateJobFormValues = z.infer<typeof createJobFormSchema>;
+// export const updateJobPostingFormSchema = jobPostingFormSchema.partial({
+//   slug: true, // opcional en edición
+// });

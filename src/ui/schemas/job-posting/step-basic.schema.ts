@@ -10,12 +10,10 @@ export const EmploymentType = z.enum(
     "VOLUNTEER",
     "PER_DIEM",
   ],
-  { message: "Selecciona un tipo válido." },
+  { message: "Selecciona un tipo de contexto válido." },
 );
 
-// TODO: Cambiar de nombre a createJobDraftFormSchema o algo similar,
-//       ya que este formulario se usará para creación para la ruta /admin/jobs/new.
-export const createJobFormSchema = z.object({
+export const stepBasicSchema = z.object({
   title: z
     .string()
     .min(3, { message: "El título debe tener al menos 3 caracteres." })
@@ -46,4 +44,4 @@ export const createJobFormSchema = z.object({
   pipelineId: z.uuid({ message: "Selecciona un pipeline válido." }),
 });
 
-export type CreateJobFormValues = z.infer<typeof createJobFormSchema>;
+export type StepBasicValues = z.infer<typeof stepBasicSchema>;

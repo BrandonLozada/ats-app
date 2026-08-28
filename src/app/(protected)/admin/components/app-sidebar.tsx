@@ -60,6 +60,10 @@ const data = {
       isActive: true,
       items: [
         {
+          title: "Dashboard",
+          url: "/admin",
+        },
+        {
           title: "Nueva vacante",
           url: "/admin/jobs/new",
         },
@@ -69,7 +73,23 @@ const data = {
         },
         {
           title: "Archivadas",
-          url: "#",
+          url: "/admin/jobs/archived",
+        },
+        {
+          title: "Candidatos",
+          url: "/admin/candidates",
+        },
+        {
+          title: "Agenda",
+          url: "/admin/agenda",
+        },
+        {
+          title: "Calendario",
+          url: "/admin/calendar",
+        },
+        {
+          title: "Configuración",
+          url: "/admin/settings",
         },
       ],
     },

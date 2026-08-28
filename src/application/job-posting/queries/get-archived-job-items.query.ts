@@ -1,13 +1,12 @@
 import { PrismaService } from "@/infrastructure/database/prisma.service";
 import { formatDateLong } from "@/utils/date";
 
-// TODO: Implementar filtros de búsqueda, paginación y ordenamiento en esta consulta para las rutas admin.
-export async function getJobItems() {
+export async function getArchivedJobItems() {
   const prisma = PrismaService.client;
 
   const jobs = await prisma.jobPosting.findMany({
     where: {
-      NOT: { status: "CLOSED" },
+      status: "CLOSED",
     },
     select: {
       id: true,

@@ -17,6 +17,9 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import ModeToggleButton from "@/components/common/mode-toggle-button";
+import UserButton from "@/components/common/user-button";
+import { AuthService } from "@/infrastructure/auth/auth.service";
 
 export const metadata: Metadata = {
   title: {
@@ -57,12 +60,18 @@ export default async function AdminLayout({
 }) {
   await requireRole("ADMIN");
 
+  const session = await AuthService.getSession();
+
+  const user = session ? session.user : null;
+
   return (
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-          <div className="flex items-center gap-2 px-4">
+        {/* <header className="flex justify-between h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 fixed top-0 w-full z-50 border-b bg-background/50 backdrop-blur-2xl">
+          <div className="flex items-center gap-2 px-4"> */}
+        <header className="flex justify-between h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 fixed top-0 w-full z-50 border-b bg-background/50 backdrop-blur-2xl">
+          <div className="flex items-center gap-2 px-4 min-w-0">
             <SidebarTrigger className="-ml-1" />
             <Separator
               orientation="vertical"
@@ -80,8 +89,14 @@ export default async function AdminLayout({
               </BreadcrumbList>
             </Breadcrumb>
           </div>
+          <div className="flex items-center justify-end gap-2 px-4 shrink-0">
+            <ModeToggleButton className="rounded-full" />
+            <UserButton user={user} />
+          </div>
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">{children}</div>
+        <div className="pt-16 group-has-data-[collapsible=icon]/sidebar-wrapper:pt-12 flex-1 min-h-[calc(100vh-4rem)] group-has-data-[collapsible=icon]/sidebar-wrapper:min-h-[calc(100vh-3rem)] transition-[padding,height] ease-linear overflow-y-scroll flex-col gap-4 p-4">
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );
