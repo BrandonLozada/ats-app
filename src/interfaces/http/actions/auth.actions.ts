@@ -3,7 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { auth } from "@/lib/auth";
+import { auth } from "@/modules/identity/public.server";
 import { loginSchema } from "@/application/schemas/auth/login.schema";
 import { signInSchema } from "@/application/schemas/auth/sign-in.schema";
 import { registerSchema } from "@/application/schemas/auth/register-schema";

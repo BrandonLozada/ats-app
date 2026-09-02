@@ -1,6 +1,6 @@
 "use client";
 
-import { AuthClient } from "@/infrastructure/auth/auth.client";
+import { AuthClient } from "@/modules/identity/public";
 
 // Client Side (For UI purposes)
 export function useAuth() {

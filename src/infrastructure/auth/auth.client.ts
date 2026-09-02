@@ -1,5 +1,2 @@
-import { authClient } from "@/lib/auth-client";
-
-export const AuthClient = {
-  useSession: authClient.useSession,
-};
+// Compatibility bridge: canonical AuthClient relocated to Identity module
+export { AuthClient } from "@/modules/identity/public";

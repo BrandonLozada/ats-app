@@ -1,6 +1,6 @@
 "use server";
 
-import { createAppContext } from "@/infrastructure/auth/context.factory";
+import { createAppContext } from "@/infrastructure/auth/create-context";
 import { candidateService } from "@/application/services/candidate.service";
 
 export async function getMyCandidateProfile() {
