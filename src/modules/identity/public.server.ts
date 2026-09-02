@@ -1,3 +1,7 @@
+export {
+  resolveCurrentActor,
+  type CurrentActor,
+} from "./infrastructure/better-auth/current-actor.resolver";
 export { auth, type Session } from "./infrastructure/better-auth/auth.config";
 export {
   getServerSession,
