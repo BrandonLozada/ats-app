@@ -2,16 +2,13 @@
 
 import * as React from "react";
 import {
-  IconLayoutRows,
-  IconWaveSine,
-  IconCommand,
-  IconTerminal2,
-  IconRobot,
-  IconBook,
-  IconSettings,
   IconFrame,
   IconChartPie,
   IconMap,
+  IconBriefcase,
+  IconHospital,
+  IconStethoscope,
+  IconBuildingHospital,
 } from "@tabler/icons-react";
 
 import { NavMain } from "./nav-main";
@@ -33,106 +30,51 @@ const data = {
     email: "m@example.com",
     avatar: "/avatars/shadcn.jpg",
   },
-  teams: [
+  branches: [
     {
-      name: "Acme Inc",
-      logo: <IconLayoutRows />,
+      name: "Ama Hospital - Anáhuac",
+      logo: <IconBuildingHospital />,
       plan: "Enterprise",
     },
     {
-      name: "Acme Corp.",
-      logo: <IconWaveSine />,
+      name: "Ama Hospital - Consultorios Norte",
+      logo: <IconStethoscope />,
       plan: "Startup",
     },
     {
-      name: "Evil Corp.",
-      logo: <IconCommand />,
+      name: "Ama Servicios Médicos - Apodaca",
+      logo: <IconHospital />,
       plan: "Free",
     },
   ],
+  // Revisar porque navmain tiene una URL por fuera de items
+  // Además revisar porque no muestra la página activa de la ruta
   navMain: [
     {
-      title: "Playground",
-      url: "#",
-      icon: <IconTerminal2 />,
+      title: "Módulos",
+      url: "/recruiter",
+      icon: <IconBriefcase />,
       isActive: true,
       items: [
         {
-          title: "History",
-          url: "#",
+          title: "Dashboard",
+          url: "/recruiter",
         },
         {
-          title: "Starred",
-          url: "#",
+          title: "Candidatos",
+          url: "/recruiter/candidates",
         },
         {
-          title: "Settings",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Models",
-      url: "#",
-      icon: <IconRobot />,
-      items: [
-        {
-          title: "Genesis",
-          url: "#",
+          title: "Kanban",
+          url: "/recruiter/kanban",
         },
         {
-          title: "Explorer",
-          url: "#",
+          title: "Agenda",
+          url: "/recruiter/planner?view=agenda",
         },
         {
-          title: "Quantum",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Documentation",
-      url: "#",
-      icon: <IconBook />,
-      items: [
-        {
-          title: "Introduction",
-          url: "#",
-        },
-        {
-          title: "Get Started",
-          url: "#",
-        },
-        {
-          title: "Tutorials",
-          url: "#",
-        },
-        {
-          title: "Changelog",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Settings",
-      url: "#",
-      icon: <IconSettings />,
-      items: [
-        {
-          title: "General",
-          url: "#",
-        },
-        {
-          title: "Team",
-          url: "#",
-        },
-        {
-          title: "Billing",
-          url: "#",
-        },
-        {
-          title: "Limits",
-          url: "#",
+          title: "Calendario",
+          url: "/recruiter/planner?view=calendar",
         },
       ],
     },
@@ -160,15 +102,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+        <TeamSwitcher teams={data.branches} />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
+        {/* <NavProjects projects={data.projects} /> */}
       </SidebarContent>
-      <SidebarFooter>
-        <NavUser user={data.user} />
-      </SidebarFooter>
+      <SidebarFooter>{/* <NavUser user={data.user} /> */}</SidebarFooter>
       <SidebarRail />
     </Sidebar>
   );

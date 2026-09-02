@@ -13,11 +13,14 @@ import {
   IconChartPie,
   IconMap,
   IconBriefcase,
+  IconHospital,
+  IconStethoscope,
+  IconBuildingHospital,
   IconSitemap,
 } from "@tabler/icons-react";
 
 import { NavMain } from "./nav-main";
-import { NavProjects } from "./nav-projects";
+// import { NavProjects } from "./nav-projects";
 import { NavUser } from "./nav-user";
 import { TeamSwitcher } from "./team-switcher";
 import {
@@ -35,20 +38,20 @@ const data = {
     email: "m@example.com",
     avatar: "/avatars/shadcn.jpg",
   },
-  teams: [
+  branches: [
     {
-      name: "Acme Inc",
-      logo: <IconLayoutRows />,
+      name: "Ama Hospital - Anáhuac",
+      logo: <IconBuildingHospital />,
       plan: "Enterprise",
     },
     {
-      name: "Acme Corp.",
-      logo: <IconWaveSine />,
+      name: "Ama Hospital - Consultorios Norte",
+      logo: <IconStethoscope />,
       plan: "Startup",
     },
     {
-      name: "Evil Corp.",
-      logo: <IconCommand />,
+      name: "Ama Servicios Médicos - Apodaca",
+      logo: <IconHospital />,
       plan: "Free",
     },
   ],
@@ -74,18 +77,6 @@ const data = {
         {
           title: "Archivadas",
           url: "/admin/jobs/archived",
-        },
-        {
-          title: "Candidatos",
-          url: "/admin/candidates",
-        },
-        {
-          title: "Agenda",
-          url: "/admin/agenda",
-        },
-        {
-          title: "Calendario",
-          url: "/admin/calendar",
         },
         {
           title: "Configuración",
@@ -202,15 +193,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+        <TeamSwitcher teams={data.branches} />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
         {/* <NavProjects projects={data.projects} /> */}
       </SidebarContent>
-      <SidebarFooter>
-        <NavUser user={data.user} />
-      </SidebarFooter>
+      <SidebarFooter>{/* <NavUser user={data.user} /> */}</SidebarFooter>
       <SidebarRail />
     </Sidebar>
   );
