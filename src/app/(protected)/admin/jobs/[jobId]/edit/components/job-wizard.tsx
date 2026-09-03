@@ -26,7 +26,6 @@ interface JobWizardProps {
   pipelineOptions: SelectOption[];
   seniorityLevelOptions: SelectOption[];
   currencyOptions: SelectOption[];
-  branchOptions: SelectOption[];
 }
 
 export function JobWizard({
@@ -39,7 +38,6 @@ export function JobWizard({
   pipelineOptions,
   seniorityLevelOptions,
   currencyOptions,
-  branchOptions,
 }: JobWizardProps) {
   const params = useSearchParams();
   const router = useRouter();
@@ -96,7 +94,6 @@ export function JobWizard({
             <StepLocation
               jobId={jobId}
               job={job}
-              branchOptions={branchOptions}
               onNext={() => goTo("seo")}
             />
           )}

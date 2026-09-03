@@ -38,10 +38,4 @@ export interface JobDTO {
   validThrough?: Date | null;
 
   organizationId?: string | null;
-
-  //
-  branches: {
-    branchId: string;
-    name: string;
-  }[];
 }

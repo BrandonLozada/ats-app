@@ -5,13 +5,6 @@ export async function getJobById(jobId: string) {
 
   const job = await prisma.jobPosting.findUnique({
     where: { id: jobId },
-    include: {
-      branches: {
-        include: {
-          branch: true,
-        },
-      },
-    },
   });
 
   if (!job) return null;
@@ -48,11 +41,6 @@ export async function getJobById(jobId: string) {
     validThrough: job.validThrough,
 
     organizationId: job.organizationId,
-
-    branches: job.branches.map((b) => ({
-      branchId: b.branchId,
-      name: b.branch.name,
-    })),
   };
 
   return formattedJob;

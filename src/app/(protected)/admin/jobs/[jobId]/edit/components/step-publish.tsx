@@ -249,17 +249,6 @@ export function StepPublish({ jobId, job }: StepPublishProps) {
                         {job.applyUrl}
                       </p>
                     )}
-
-                    {job.branches.length > 0 && (
-                      <div>
-                        <span className="font-medium">Sucursales:</span>
-                        <ul className="list-disc ml-5">
-                          {job.branches.map((b) => (
-                            <li key={b.branchId}>{b.name}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>

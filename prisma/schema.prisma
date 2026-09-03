@@ -238,7 +238,6 @@ model JobPosting {
   updatedById      String?            @map("updated_by_id") @db.Uuid
   updatedAt        DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
   applications     Application[]
-  branches         JobPostingBranch[]
   category         JobCategory        @relation(fields: [categoryId], references: [id])
   createdBy        User?              @relation("JobPostingCreatedBy", fields: [createdById], references: [id])
   department       Department?        @relation(fields: [departmentId], references: [id])
@@ -257,19 +256,17 @@ model JobPosting {
 
 model Department {
   id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId    String?      @map("tenant_id") @db.Uuid
+  tenantId    String       @map("tenant_id") @db.Uuid
   name        String
-  slug        String       @unique
-  parentId    String?      @map("parent_id") @db.Uuid
+  slug        String
   isActive    Boolean      @default(true) @map("is_active")
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  tenant      Tenant?      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  parent      Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id])
-  children    Department[] @relation("DepartmentHierarchy")
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   jobPostings JobPosting[]
 
+  @@unique([tenantId, slug])
   @@unique([tenantId, name])
   @@index([tenantId])
   @@map("departments")
@@ -336,33 +333,6 @@ model Organization {
   jobPostings JobPosting[]
 
   @@map("organizations")
-}
-
-model Branch {
-  id          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name        String
-  street      String?
-  city        String
-  state       String
-  postalCode  String?            @map("postal_code")
-  country     String
-  latitude    Float?
-  longitude   Float?
-  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  jobPostings JobPostingBranch[]
-
-  @@map("branches")
-}
-
-model JobPostingBranch {
-  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  jobPostingId String     @map("job_posting_id") @db.Uuid
-  branchId     String     @map("branch_id") @db.Uuid
-  branch       Branch     @relation(fields: [branchId], references: [id])
-  jobPosting   JobPosting @relation(fields: [jobPostingId], references: [id])
-
-  @@unique([jobPostingId, branchId])
-  @@map("job_posting_branches")
 }
 
 model JobCategory {

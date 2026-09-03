@@ -15,8 +15,10 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   // Admin Role con permisos
-  const adminRole = await prisma.role.create({
-    data: {
+  const adminRole = await prisma.role.upsert({
+    where: { name: "ADMIN" },
+    update: {},
+    create: {
       name: "ADMIN",
       permissions: {
         create: [
@@ -51,11 +53,13 @@ async function main() {
       permissions: { include: { permission: true } },
     },
   });
-  console.log("✅ Rol ADMIN creado:", adminRole);
+  console.log("✅ Rol ADMIN creado/upserted:", adminRole.name);
 
   // Recruiter Role con permisos
-  const recruiterRole = await prisma.role.create({
-    data: {
+  const recruiterRole = await prisma.role.upsert({
+    where: { name: "RECRUITER" },
+    update: {},
+    create: {
       name: "RECRUITER",
       permissions: {
         create: [
@@ -90,7 +94,7 @@ async function main() {
       permissions: { include: { permission: true } },
     },
   });
-  console.log("✅ Rol RECRUITER creado:", recruiterRole);
+  console.log("✅ Rol RECRUITER creado/upserted:", recruiterRole.name);
 
   // Sources
   const sources = await prisma.applicationSource.createMany({
@@ -107,38 +111,102 @@ async function main() {
   console.log("✅ Sources creados:", sources);
 
   // Pipeline con stages
-  const pipeline = await prisma.hiringPipeline.create({
-    data: {
-      name: "Default Hiring",
-      isDefault: true,
-      stages: {
-        create: [
-          { name: "stage_1", type: "APPLIED", order: 1, isFinal: false },
-          { name: "stage_2", type: "SCREENING", order: 2, isFinal: false },
-          { name: "stage_3", type: "INTERVIEW", order: 3, isFinal: false },
-          { name: "stage_4", type: "OFFER", order: 4, isFinal: false },
-          { name: "stage_5", type: "HIRED", order: 5, isFinal: true },
-          { name: "stage_6", type: "REJECTED", order: 6, isFinal: true },
-        ],
-      },
-    },
+  let pipeline = await prisma.hiringPipeline.findFirst({
+    where: { name: "Default Hiring" },
     include: { stages: true },
   });
-  console.log("✅ Pipeline creado:", pipeline);
+  if (!pipeline) {
+    pipeline = await prisma.hiringPipeline.create({
+      data: {
+        name: "Default Hiring",
+        isDefault: true,
+        stages: {
+          create: [
+            { name: "stage_1", type: "APPLIED", order: 1, isFinal: false },
+            { name: "stage_2", type: "SCREENING", order: 2, isFinal: false },
+            { name: "stage_3", type: "INTERVIEW", order: 3, isFinal: false },
+            { name: "stage_4", type: "OFFER", order: 4, isFinal: false },
+            { name: "stage_5", type: "HIRED", order: 5, isFinal: true },
+            { name: "stage_6", type: "REJECTED", order: 6, isFinal: true },
+          ],
+        },
+      },
+      include: { stages: true },
+    });
+  }
+  console.log("✅ Pipeline creado/obtenido:", pipeline.name);
 
-  // Departments
+  // Canonical Tenancy Bootstrap
+  const tenant = await prisma.tenant.upsert({
+    where: { slug: "ama" },
+    update: {},
+    create: {
+      id: "e6759b00-099e-443a-8aa5-2bfc67b191ea",
+      name: COMPANY_NAME,
+      slug: "ama",
+    },
+  });
+  console.log("✅ Tenant creado/upserted:", tenant);
+
+  const leAnahuac = await prisma.legalEntity.upsert({
+    where: { tenantId_name: { tenantId: tenant.id, name: "AMA Anáhuac" } },
+    update: {},
+    create: {
+      id: "11111111-1111-4111-a111-111111111111",
+      tenantId: tenant.id,
+      name: "AMA Anáhuac",
+      code: "ANAHUAC",
+    },
+  });
+  const leApodaca = await prisma.legalEntity.upsert({
+    where: { tenantId_name: { tenantId: tenant.id, name: "AMA Apodaca" } },
+    update: {},
+    create: {
+      id: "22222222-2222-4222-a222-222222222222",
+      tenantId: tenant.id,
+      name: "AMA Apodaca",
+      code: "APODACA",
+    },
+  });
+  console.log("✅ LegalEntities creadas:", [leAnahuac.name, leApodaca.name]);
+
+  await prisma.location.upsert({
+    where: { tenantId_legalEntityId_name: { tenantId: tenant.id, legalEntityId: leAnahuac.id, name: "Anáhuac" } },
+    update: {},
+    create: {
+      id: "33333333-3333-4333-a333-333333333333",
+      tenantId: tenant.id,
+      legalEntityId: leAnahuac.id,
+      name: "Anáhuac",
+      code: "ANAHUAC",
+    },
+  });
+  await prisma.location.upsert({
+    where: { tenantId_legalEntityId_name: { tenantId: tenant.id, legalEntityId: leApodaca.id, name: "Apodaca" } },
+    update: {},
+    create: {
+      id: "44444444-4444-4444-a444-444444444444",
+      tenantId: tenant.id,
+      legalEntityId: leApodaca.id,
+      name: "Apodaca",
+      code: "APODACA",
+    },
+  });
+  console.log("✅ Locations creadas: Anáhuac, Apodaca");
+
+  // Departments (Tenant-scoped)
   const departments = await prisma.department.createMany({
     data: [
-      { name: "Urgencias", slug: "urgencias" },
-      { name: "Consulta Externa", slug: "consulta-externa" },
-      { name: "Administración", slug: "administracion" },
-      { name: "Laboratorio", slug: "laboratorio" },
-      { name: "Imagenología", slug: "imagenologia" },
-      { name: "Farmacia", slug: "farmacia" },
-      { name: "Enfermería", slug: "enfermeria" },
-      { name: "Médicos", slug: "medicos" },
-      { name: "TI", slug: "ti" },
-      { name: "Recursos Humanos", slug: "rrhh" },
+      { tenantId: tenant.id, name: "Urgencias", slug: "urgencias" },
+      { tenantId: tenant.id, name: "Consulta Externa", slug: "consulta-externa" },
+      { tenantId: tenant.id, name: "Administración", slug: "administracion" },
+      { tenantId: tenant.id, name: "Laboratorio", slug: "laboratorio" },
+      { tenantId: tenant.id, name: "Imagenología", slug: "imagenologia" },
+      { tenantId: tenant.id, name: "Farmacia", slug: "farmacia" },
+      { tenantId: tenant.id, name: "Enfermería", slug: "enfermeria" },
+      { tenantId: tenant.id, name: "Médicos", slug: "medicos" },
+      { tenantId: tenant.id, name: "TI", slug: "ti" },
+      { tenantId: tenant.id, name: "Recursos Humanos", slug: "rrhh" },
     ],
     skipDuplicates: true,
   });
@@ -158,31 +226,11 @@ async function main() {
   });
   console.log("✅ Job categories creados:", jobCategories);
 
-  // Branches
-  const branches = await prisma.branch.createMany({
-    data: [
-      {
-        name: "Palacio de Justicia",
-        city: "San Nicolás de los Garza",
-        state: "Nuevo León",
-        country: "México",
-      },
-      {
-        name: "Topo Chico",
-        city: "San Nicolás de los Garza",
-        state: "Nuevo León",
-        country: "México",
-      },
-    ],
-    skipDuplicates: true,
-  });
-  console.log("✅ Branches creados:", branches);
-
   // Caso de uso: upsert
   const enfermeria = await prisma.department.upsert({
-    where: { slug: "enfermeria" },
+    where: { tenantId_slug: { tenantId: tenant.id, slug: "enfermeria" } },
     update: {},
-    create: { name: "Enfermería", slug: "enfermeria" },
+    create: { tenantId: tenant.id, name: "Enfermería", slug: "enfermeria" },
   });
   console.log("✅ Department upsert:", enfermeria);
 
@@ -193,13 +241,23 @@ async function main() {
   });
   console.log("✅ JobCategory upsert:", salud);
 
-  const org = await prisma.organization.create({
-    data: { name: COMPANY_NAME, website: COMPANY_DOMAIN },
+  // Organization is a temporary legacy compatibility fixture. It is NOT Tenant.
+  const LEGACY_ORG_ID = "00000000-0000-4000-8000-000000000001";
+  const org = await prisma.organization.upsert({
+    where: { id: LEGACY_ORG_ID },
+    update: {},
+    create: {
+      id: LEGACY_ORG_ID,
+      name: COMPANY_NAME,
+      website: COMPANY_DOMAIN,
+    },
   });
-  console.log("✅ Organization creada:", org);
+  console.log("✅ Legacy Organization creada/preservada:", org);
 
-  const job = await prisma.jobPosting.create({
-    data: {
+  const job = await prisma.jobPosting.upsert({
+    where: { slug: "enfermera-general" },
+    update: {},
+    create: {
       title: "Enfermera General",
       slug: "enfermera-general",
       description: "Atención a pacientes...",
@@ -212,7 +270,7 @@ async function main() {
       isRemote: false,
     },
   });
-  console.log("✅ JobPosting creado:", job);
+  console.log("✅ JobPosting creado/upserted:", job);
 }
 
 main()
@@ -222,17 +280,5 @@ main()
   .catch(async (e) => {
     console.error(e);
     await prisma.$disconnect();
-    process.exit(1);
-  });
-
-main()
-  .then(async () => {
-    await prisma.$disconnect();
-    // await pool.end();
-  })
-  .catch(async (e) => {
-    console.error(e);
-    await prisma.$disconnect();
-    // await pool.end();
     process.exit(1);
   });

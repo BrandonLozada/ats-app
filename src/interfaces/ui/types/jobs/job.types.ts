@@ -75,12 +75,6 @@ export interface JobWizardUI {
   validThrough?: Date | null;
 
   organizationId?: string | null;
-
-  //
-  branches: {
-    branchId: string;
-    name: string;
-  }[];
 }
 
 export interface JobPreviewUI {
@@ -125,10 +119,4 @@ export interface JobPreviewUI {
   validThrough?: Date | null;
 
   organizationId?: string | null;
-
-  //
-  branches: {
-    branchId: string;
-    name: string;
-  }[];
 }

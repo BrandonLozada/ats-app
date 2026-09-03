@@ -6,7 +6,6 @@ import { getCategoryOptionsList } from "@/application/job-posting/queries/get-ca
 import { getDepartmentOptionsList } from "@/application/job-posting/queries/get-department-options.query";
 import { getPipelineOptionsList } from "@/application/job-posting/queries/get-pipeline-options.query";
 import { getSeniorityLevel } from "@/application/job-posting/queries/get-seniority-level.query";
-import { getBranchOptionsList } from "@/application/job-posting/queries/get-branch-options.query";
 import { toOption } from "@/application/shared/mappers/to-option";
 import { JobWizard } from "./components/job-wizard";
 import { getJobPreviewById } from "@/application/job-posting/queries/get-job-preview-by-id.query";
@@ -49,11 +48,10 @@ export default async function JobWizardPage({
     notFound();
   }
 
-  const [categories, departments, pipelines, branches] = await Promise.all([
+  const [categories, departments, pipelines] = await Promise.all([
     getCategoryOptionsList(),
     getDepartmentOptionsList(),
     getPipelineOptionsList(),
-    getBranchOptionsList(),
   ]);
 
   const employmentTypeOptions = getEmploymentType();
@@ -61,7 +59,6 @@ export default async function JobWizardPage({
   const departmentOptions = toOption(departments);
   const pipelineOptions = toOption(pipelines);
   const seniorityLevelOptions = getSeniorityLevel();
-  const branchOptions = toOption(branches);
   const currencyOptions = [
     { value: "MXN", label: "Peso mexicano (MXN)" },
     { value: "USD", label: "Dólar estadounidense (USD)" },
@@ -78,7 +75,6 @@ export default async function JobWizardPage({
       pipelineOptions={pipelineOptions}
       seniorityLevelOptions={seniorityLevelOptions}
       currencyOptions={currencyOptions}
-      branchOptions={branchOptions}
     />
   );
 }

@@ -17,11 +17,6 @@ export async function getJobPreviewById(jobId: string) {
           name: true,
         },
       },
-      branches: {
-        include: {
-          branch: true,
-        },
-      },
     },
   });
 
@@ -63,11 +58,6 @@ export async function getJobPreviewById(jobId: string) {
     validThrough: job.validThrough,
 
     organizationId: job.organizationId,
-
-    branches: job.branches.map((b) => ({
-      branchId: b.branchId,
-      name: b.branch.name,
-    })),
   };
 
   return formattedJob;

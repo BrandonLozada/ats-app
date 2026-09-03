@@ -11,9 +11,6 @@ export async function GET() {
     include: {
       category: true,
       department: true,
-      branches: {
-        include: { branch: true },
-      },
     },
   });
 

@@ -40,9 +40,6 @@ export async function getPublishedJobsOld() {
     include: {
       category: true,
       department: true,
-      branches: {
-        include: { branch: true },
-      },
     },
   });
 }
@@ -142,16 +139,6 @@ export async function getPublicJobs({
           logoUrl: true,
         },
       },
-      branches: {
-        select: {
-          branch: {
-            select: {
-              city: true,
-              state: true,
-            },
-          },
-        },
-      },
     },
   });
 }
@@ -164,11 +151,6 @@ export async function getJobDetail(jobId: string, userId?: string) {
       organization: true,
       category: true,
       department: true,
-      branches: {
-        include: {
-          branch: true,
-        },
-      },
       _count: {
         select: {
           applications: true,
@@ -239,17 +221,6 @@ export async function getJobs(params: {
           logoUrl: true,
         },
       },
-
-      branches: {
-        select: {
-          branch: {
-            select: {
-              city: true,
-              state: true,
-            },
-          },
-        },
-      },
     },
   });
 
@@ -261,11 +232,7 @@ export async function getJobs(params: {
     organizationName: job.organization?.name ?? null,
     organizationLogo: job.organization?.logoUrl ?? null,
 
-    location: job.isRemote
-      ? "Remote"
-      : job.branches?.[0]
-        ? `${job.branches[0].branch.city}, ${job.branches[0].branch.state}`
-        : "N/A",
+    location: job.isRemote ? "Remote" : "N/A",
 
     publishedAt: job.publishedAt,
   }));
@@ -285,12 +252,6 @@ export async function getJobById({
       organization: true,
       category: true,
       department: true,
-
-      branches: {
-        include: {
-          branch: true,
-        },
-      },
 
       _count: {
         select: {
@@ -340,12 +301,6 @@ export async function getJobById({
 
   //   department: job.department?.name ?? null,
   //   category: job.category?.name ?? null,
-
-  //   locations: job.branches.map((b) => ({
-  //     city: b.branch.city,
-  //     state: b.branch.state,
-  //     country: b.branch.country,
-  //   })),
 
   //   isRemote: job.isRemote,
 
