@@ -14,87 +14,29 @@ const adapter = new PrismaPg({
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  // Admin Role con permisos
-  const adminRole = await prisma.role.upsert({
-    where: { name: "ADMIN" },
-    update: {},
-    create: {
-      name: "ADMIN",
-      permissions: {
-        create: [
-          {
-            permission: {
-              connectOrCreate: {
-                where: { name: "application.create" },
-                create: { name: "application.create" },
-              },
-            },
-          },
-          {
-            permission: {
-              connectOrCreate: {
-                where: { name: "application.move_stage" },
-                create: { name: "application.move_stage" },
-              },
-            },
-          },
-          {
-            permission: {
-              connectOrCreate: {
-                where: { name: "application.read" },
-                create: { name: "application.read" },
-              },
-            },
-          },
-        ],
-      },
-    },
-    include: {
-      permissions: { include: { permission: true } },
-    },
-  });
-  console.log("✅ Rol ADMIN creado/upserted:", adminRole.name);
+  // Global Canonical Permissions
+  const permissionsList = [
+    "application.create",
+    "application.read",
+    "application.move_stage",
+    "vacancy.create",
+    "vacancy.publish",
+    "candidate.create",
+    "candidate.read",
+    "tenant.manage",
+    "pipeline.manage",
+  ];
 
-  // Recruiter Role con permisos
-  const recruiterRole = await prisma.role.upsert({
-    where: { name: "RECRUITER" },
-    update: {},
-    create: {
-      name: "RECRUITER",
-      permissions: {
-        create: [
-          {
-            permission: {
-              connectOrCreate: {
-                where: { name: "application.create" },
-                create: { name: "application.create" },
-              },
-            },
-          },
-          {
-            permission: {
-              connectOrCreate: {
-                where: { name: "application.move_stage" },
-                create: { name: "application.move_stage" },
-              },
-            },
-          },
-          {
-            permission: {
-              connectOrCreate: {
-                where: { name: "application.read" },
-                create: { name: "application.read" },
-              },
-            },
-          },
-        ],
-      },
-    },
-    include: {
-      permissions: { include: { permission: true } },
-    },
-  });
-  console.log("✅ Rol RECRUITER creado/upserted:", recruiterRole.name);
+  const permissions: Record<string, { id: string; name: string }> = {};
+  for (const name of permissionsList) {
+    const perm = await prisma.permission.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
+    permissions[name] = perm;
+  }
+  console.log("✅ Permisos globales creados/upserted:", Object.keys(permissions));
 
   // Sources
   const sources = await prisma.applicationSource.createMany({
@@ -147,6 +89,86 @@ async function main() {
     },
   });
   console.log("✅ Tenant creado/upserted:", tenant);
+
+  // Seed Canonical Roles per AMA Tenant
+  const rolesToSeed = [
+    {
+      name: "TenantAdmin",
+      systemKey: "TENANT_ADMIN",
+      isSystem: true,
+      permissions: permissionsList,
+    },
+    {
+      name: "Recruiter",
+      systemKey: "RECRUITER",
+      isSystem: true,
+      permissions: [
+        "vacancy.create",
+        "vacancy.publish",
+        "application.create",
+        "application.read",
+        "application.move_stage",
+        "candidate.create",
+        "candidate.read",
+      ],
+    },
+    {
+      name: "HRManager",
+      systemKey: "HR_MANAGER",
+      isSystem: true,
+      permissions: [
+        "vacancy.create",
+        "vacancy.publish",
+        "application.read",
+        "candidate.read",
+      ],
+    },
+  ];
+
+  for (const r of rolesToSeed) {
+    const role = await prisma.role.upsert({
+      where: {
+        tenantId_systemKey: {
+          tenantId: tenant.id,
+          systemKey: r.systemKey,
+        },
+      },
+      update: {
+        name: r.name,
+        isSystem: r.isSystem,
+      },
+      create: {
+        tenantId: tenant.id,
+        name: r.name,
+        systemKey: r.systemKey,
+        isSystem: r.isSystem,
+      },
+    });
+
+    for (const permName of r.permissions) {
+      const perm = permissions[permName];
+      if (perm) {
+        await prisma.rolePermission.upsert({
+          where: {
+            roleId_permissionId: {
+              roleId: role.id,
+              permissionId: perm.id,
+            },
+          },
+          update: {},
+          create: {
+            roleId: role.id,
+            permissionId: perm.id,
+          },
+        });
+      }
+    }
+    console.log(`✅ Rol ${r.name} (${r.systemKey}) configurado para tenant ${tenant.slug}`);
+  }
+
+  // TenantMembership Bootstrap: Seed creates zero default memberships.
+  // Membership creation happens when a real user is intentionally associated with a tenant.
+  console.log("ℹ️ Zero TenantMembership fixtures seeded. Intentional tenant membership creation is deferred to user/organization lifecycle.");
 
   const leAnahuac = await prisma.legalEntity.upsert({
     where: { tenantId_name: { tenantId: tenant.id, name: "AMA Anáhuac" } },

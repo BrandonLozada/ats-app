@@ -12,10 +12,15 @@ export async function requireAuth() {
   return session;
 }
 
-export async function requireRole(role: string) {
+export async function requireRole(role: string, tenantId?: string) {
   const session = await requireAuth();
 
-  const roles = await AuthorizationService.getUserRoles(session.user.id);
+  if (!tenantId) {
+    console.warn("requireRole: no trusted tenant context provided; failing closed");
+    redirect("/unauthorized");
+  }
+
+  const roles = await AuthorizationService.getUserRoles(session.user.id, tenantId);
 
   console.log("requireRole roles: ", roles);
 
@@ -26,11 +31,17 @@ export async function requireRole(role: string) {
   return session;
 }
 
-export async function requirePermission(permission: string) {
+export async function requirePermission(permission: string, tenantId?: string) {
   const session = await requireAuth();
+
+  if (!tenantId) {
+    console.warn("requirePermission: no trusted tenant context provided; failing closed");
+    redirect("/unauthorized");
+  }
 
   const permissions = await AuthorizationService.getUserPermissions(
     session.user.id,
+    tenantId,
   );
 
   if (!permissions.includes(permission)) {

@@ -1,26 +1,46 @@
 import { PrismaService } from "@/infrastructure/database/prisma.service";
 
 export const AuthorizationService = {
-  async getUserPermissions(userId: string): Promise<string[]> {
+  async getUserPermissions(
+    userId: string,
+    tenantId: string,
+  ): Promise<string[]> {
+    if (!userId || !tenantId) {
+      return [];
+    }
+
     const prisma = PrismaService.client;
 
-    const roles = await prisma.userRole.findMany({
-      where: { userId },
+    const membership = await prisma.tenantMembership.findUnique({
+      where: {
+        tenantId_userId: {
+          tenantId,
+          userId,
+        },
+      },
       include: {
-        role: {
+        membershipRoles: {
           include: {
-            permissions: {
-              include: { permission: true },
+            role: {
+              include: {
+                permissions: {
+                  include: { permission: true },
+                },
+              },
             },
           },
         },
       },
     });
 
+    if (!membership || membership.status !== "ACTIVE") {
+      return [];
+    }
+
     const permissions = new Set<string>();
 
-    for (const userRole of roles) {
-      for (const rp of userRole.role.permissions) {
+    for (const mr of membership.membershipRoles) {
+      for (const rp of mr.role.permissions) {
         permissions.add(rp.permission.name);
       }
     }
@@ -28,21 +48,54 @@ export const AuthorizationService = {
     return Array.from(permissions);
   },
 
-  async getUserRoles(userId: string): Promise<string[]> {
+  async getUserRoles(userId: string, tenantId: string): Promise<string[]> {
+    if (!userId || !tenantId) {
+      return [];
+    }
+
     const prisma = PrismaService.client;
 
-    const roles = await prisma.userRole.findMany({
-      where: { userId },
+    const membership = await prisma.tenantMembership.findUnique({
+      where: {
+        tenantId_userId: {
+          tenantId,
+          userId,
+        },
+      },
       include: {
-        role: true,
+        membershipRoles: {
+          include: {
+            role: true,
+          },
+        },
       },
     });
 
-    return roles.map((ur) => ur.role.name);
+    if (!membership || membership.status !== "ACTIVE") {
+      return [];
+    }
+
+    const roles = new Set<string>();
+    for (const mr of membership.membershipRoles) {
+      roles.add(mr.role.name);
+      if (mr.role.systemKey) {
+        roles.add(mr.role.systemKey);
+      }
+    }
+
+    return Array.from(roles);
   },
 
-  async hasPermission(userId: string, permission: string) {
-    const permissions = await this.getUserPermissions(userId);
+  async hasPermission(
+    userId: string,
+    tenantId: string,
+    permission: string,
+  ): Promise<boolean> {
+    if (!userId || !tenantId || !permission) {
+      return false;
+    }
+
+    const permissions = await this.getUserPermissions(userId, tenantId);
 
     return permissions.includes(permission);
   },
