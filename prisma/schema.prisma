@@ -257,16 +257,74 @@ model JobPosting {
 
 model Department {
   id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String?      @map("tenant_id") @db.Uuid
   name        String
   slug        String       @unique
   parentId    String?      @map("parent_id") @db.Uuid
   isActive    Boolean      @default(true) @map("is_active")
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant      Tenant?      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   parent      Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id])
   children    Department[] @relation("DepartmentHierarchy")
   jobPostings JobPosting[]
 
+  @@unique([tenantId, name])
+  @@index([tenantId])
   @@map("departments")
+}
+
+model Tenant {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String
+  slug          String        @unique
+  isActive      Boolean       @default(true) @map("is_active")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  legalEntities LegalEntity[]
+  locations     Location[]
+  departments   Department[]
+
+  @@map("tenants")
+}
+
+model LegalEntity {
+  id        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String     @map("tenant_id") @db.Uuid
+  name      String
+  code      String?    @map("code")
+  isActive  Boolean    @default(true) @map("is_active")
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  locations Location[]
+
+  @@unique([tenantId, name])
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@map("legal_entities")
+}
+
+model Location {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String      @map("tenant_id") @db.Uuid
+  legalEntityId String      @map("legal_entity_id") @db.Uuid
+  name          String
+  code          String?     @map("code")
+  isActive      Boolean     @default(true) @map("is_active")
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  legalEntity   LegalEntity @relation(fields: [tenantId, legalEntityId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, legalEntityId, name])
+  @@index([tenantId])
+  @@index([legalEntityId])
+  @@map("locations")
 }
 
 model Organization {
