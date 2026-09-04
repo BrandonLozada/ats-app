@@ -64,7 +64,7 @@ async function main() {
   });
   console.log("✅ Tenant creado/upserted:", tenant);
 
-  // Pipeline con stages (Tenant-scoped con PipelineVersion)
+  // Pipeline con stages (Tenant-scoped con PipelineVersion canonical PUBLISHED)
   let pipeline = await prisma.hiringPipeline.findFirst({
     where: { tenantId: tenant.id, name: "Default Hiring" },
     include: { versions: { include: { stages: true } } },
@@ -79,7 +79,8 @@ async function main() {
           create: [
             {
               version: 1,
-              status: "DRAFT",
+              status: "PUBLISHED",
+              publishedAt: new Date("2026-09-01T00:00:00.000Z"),
               stages: {
                 create: [
                   { name: "stage_1", category: "APPLIED", order: 1, isInitial: true },
@@ -94,6 +95,18 @@ async function main() {
       },
       include: { versions: { include: { stages: true } } },
     });
+  } else {
+    // Ensure v1 is canonical PUBLISHED if pipeline already exists
+    const v1 = pipeline.versions.find((v) => v.version === 1);
+    if (v1 && (v1.status !== "PUBLISHED" || !v1.publishedAt)) {
+      await prisma.pipelineVersion.update({
+        where: { id: v1.id },
+        data: {
+          status: "PUBLISHED",
+          publishedAt: v1.publishedAt ?? new Date("2026-09-01T00:00:00.000Z"),
+        },
+      });
+    }
   }
   if (!pipeline) {
     throw new Error("Failed to initialize pipeline");
