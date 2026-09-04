@@ -78,7 +78,11 @@ export async function applyToJobUseCase(input: unknown) {
     include: {
       pipeline: {
         include: {
-          stages: true,
+          versions: {
+            include: {
+              stages: true,
+            },
+          },
         },
       },
     },
@@ -88,13 +92,25 @@ export async function applyToJobUseCase(input: unknown) {
     throw new Error("Job not found");
   }
 
-  // 6. Obtener stage inicial (APPLIED)
-  const initialStage = job.pipeline.stages
-    .filter((s) => s.type === "APPLIED")
-    .sort((a, b) => a.order - b.order)[0];
+  // 6. Obtener stage inicial
+  // Transitional compatibility: verify exactly one usable PipelineVersion exists or fail explicitly if ambiguous.
+  // TODO [I6-S3-T03]: Replace transitional resolution with canonical Recruiting module version resolver.
+  const versions = job.pipeline?.versions ?? [];
+  if (versions.length === 0) {
+    throw new Error("Pipeline has no versions");
+  }
+  if (versions.length > 1) {
+    throw new Error("Ambiguous pipeline version: multiple versions exist for legacy job posting");
+  }
+
+  const stages = versions[0].stages;
+  const initialStage =
+    stages.find((s) => s.isInitial) ??
+    stages.find((s) => s.category === "APPLIED") ??
+    stages.slice().sort((a, b) => a.order - b.order)[0];
 
   if (!initialStage) {
-    throw new Error("Pipeline has no APPLIED stage");
+    throw new Error("Pipeline has no initial stage");
   }
 
   // TODO: Podríamos hacer todo esto en una transacción para optimizar, pero por simplicidad lo dejamos así por ahora.

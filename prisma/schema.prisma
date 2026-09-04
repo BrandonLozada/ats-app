@@ -328,11 +328,13 @@ model Tenant {
   createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  legalEntities LegalEntity[]
-  locations     Location[]
-  departments   Department[]
-  roles         Role[]
-  memberships   TenantMembership[]
+  legalEntities    LegalEntity[]
+  locations        Location[]
+  departments      Department[]
+  roles            Role[]
+  memberships      TenantMembership[]
+  pipelines        HiringPipeline[]
+  pipelineVersions PipelineVersion[]
 
   @@map("tenants")
 }
@@ -397,33 +399,62 @@ model JobCategory {
 }
 
 model HiringPipeline {
-  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String            @map("tenant_id") @db.Uuid
   name        String
-  isDefault   Boolean         @default(false) @map("is_default")
-  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  isDefault   Boolean           @default(false) @map("is_default")
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  versions    PipelineVersion[]
   jobPostings JobPosting[]
+
+  @@unique([tenantId, name])
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@map("hiring_pipelines")
+}
+
+model PipelineVersion {
+  id          String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String                @map("tenant_id") @db.Uuid
+  pipelineId  String                @map("pipeline_id") @db.Uuid
+  version     Int
+  status      PipelineVersionStatus @default(DRAFT)
+  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  publishedAt DateTime?             @map("published_at") @db.Timestamptz(6)
+
+  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  pipeline    HiringPipeline        @relation(fields: [tenantId, pipelineId], references: [tenantId, id], onDelete: Cascade)
   stages      PipelineStage[]
 
-  @@map("hiring_pipelines")
+  @@unique([pipelineId, version])
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@index([pipelineId])
+  @@map("pipeline_versions")
 }
 
 model PipelineStage {
   id                 String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  pipelineId         String                    @map("pipeline_id") @db.Uuid
-  type               StageType
+  pipelineVersionId  String                    @map("pipeline_version_id") @db.Uuid
   name               String
+  category           StageCategory
   order              Int
-  isFinal            Boolean                   @default(false) @map("is_final")
+  isInitial          Boolean                   @default(false) @map("is_initial")
   createdAt          DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime                  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  version            PipelineVersion           @relation(fields: [pipelineVersionId], references: [id], onDelete: Cascade)
   fromStageHistories ApplicationStageHistory[] @relation("FromStage")
   toStageHistories   ApplicationStageHistory[] @relation("ToStage")
   applications       Application[]
   interviews         Interview[]
-  pipeline           HiringPipeline            @relation(fields: [pipelineId], references: [id])
 
-  @@unique([pipelineId, order])
-  @@unique([pipelineId, type])
-  @@index([pipelineId])
+  @@unique([pipelineVersionId, order])
+  @@index([pipelineVersionId])
   @@map("pipeline_stages")
 }
 
@@ -545,15 +576,24 @@ enum JobStatus {
   @@map("job_status")
 }
 
-enum StageType {
+enum PipelineVersionStatus {
+  DRAFT
+  PUBLISHED
+
+  @@map("pipeline_version_status")
+}
+
+enum StageCategory {
   APPLIED
   SCREENING
+  CONTACT
   INTERVIEW
+  ASSESSMENT
+  DOCUMENTATION
   OFFER
-  HIRED
-  REJECTED
+  OTHER
 
-  @@map("stage_types")
+  @@map("stage_categories")
 }
 
 enum InterviewType {

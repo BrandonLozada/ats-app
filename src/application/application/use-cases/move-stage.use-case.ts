@@ -38,7 +38,11 @@ export async function moveStageUseCase(input: unknown) {
           include: {
             pipeline: {
               include: {
-                stages: true,
+                versions: {
+                  include: {
+                    stages: true,
+                  },
+                },
               },
             },
           },
@@ -58,7 +62,8 @@ export async function moveStageUseCase(input: unknown) {
     }
 
     // 2. Obtener stage destino
-    const targetStage = pipeline.stages.find((s) => s.id === data.toStageId);
+    const stages = pipeline.versions?.flatMap((v) => v.stages) ?? [];
+    const targetStage = stages.find((s) => s.id === data.toStageId);
 
     if (!targetStage) {
       throw new Error("Target stage not in same pipeline");
@@ -70,12 +75,7 @@ export async function moveStageUseCase(input: unknown) {
     }
 
     // 4. Reglas de negocio
-
-    // TODO: Implementar lógica de validación de transiciones más robusta con PipelineEngine.
-    // Ejemplo: no mover desde final (opcional)
-    if (currentStage.isFinal) {
-      throw new Error("Cannot move from final stage");
-    }
+    // Note: Legacy isFinal is removed in target schema; terminal semantics are deferred to Stage 6 ApplicationOutcome.
 
     // Ejemplo: no mover hacia atrás (opcional, tú decides)
     // if (targetStage.order < currentStage.order) {

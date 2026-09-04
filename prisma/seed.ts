@@ -52,32 +52,6 @@ async function main() {
   });
   console.log("✅ Sources creados:", sources);
 
-  // Pipeline con stages
-  let pipeline = await prisma.hiringPipeline.findFirst({
-    where: { name: "Default Hiring" },
-    include: { stages: true },
-  });
-  if (!pipeline) {
-    pipeline = await prisma.hiringPipeline.create({
-      data: {
-        name: "Default Hiring",
-        isDefault: true,
-        stages: {
-          create: [
-            { name: "stage_1", type: "APPLIED", order: 1, isFinal: false },
-            { name: "stage_2", type: "SCREENING", order: 2, isFinal: false },
-            { name: "stage_3", type: "INTERVIEW", order: 3, isFinal: false },
-            { name: "stage_4", type: "OFFER", order: 4, isFinal: false },
-            { name: "stage_5", type: "HIRED", order: 5, isFinal: true },
-            { name: "stage_6", type: "REJECTED", order: 6, isFinal: true },
-          ],
-        },
-      },
-      include: { stages: true },
-    });
-  }
-  console.log("✅ Pipeline creado/obtenido:", pipeline.name);
-
   // Canonical Tenancy Bootstrap
   const tenant = await prisma.tenant.upsert({
     where: { slug: "ama" },
@@ -89,6 +63,43 @@ async function main() {
     },
   });
   console.log("✅ Tenant creado/upserted:", tenant);
+
+  // Pipeline con stages (Tenant-scoped con PipelineVersion)
+  let pipeline = await prisma.hiringPipeline.findFirst({
+    where: { tenantId: tenant.id, name: "Default Hiring" },
+    include: { versions: { include: { stages: true } } },
+  });
+  if (!pipeline) {
+    pipeline = await prisma.hiringPipeline.create({
+      data: {
+        tenantId: tenant.id,
+        name: "Default Hiring",
+        isDefault: true,
+        versions: {
+          create: [
+            {
+              version: 1,
+              status: "DRAFT",
+              stages: {
+                create: [
+                  { name: "stage_1", category: "APPLIED", order: 1, isInitial: true },
+                  { name: "stage_2", category: "SCREENING", order: 2, isInitial: false },
+                  { name: "stage_3", category: "INTERVIEW", order: 3, isInitial: false },
+                  { name: "stage_4", category: "OFFER", order: 4, isInitial: false },
+                ],
+              },
+            },
+          ],
+        },
+      },
+      include: { versions: { include: { stages: true } } },
+    });
+  }
+  if (!pipeline) {
+    throw new Error("Failed to initialize pipeline");
+  }
+  console.log("✅ Pipeline creado/obtenido:", pipeline.name);
+
 
   // Seed Canonical Roles per AMA Tenant
   const rolesToSeed = [

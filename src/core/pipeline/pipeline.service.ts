@@ -2,7 +2,7 @@ import { PrismaService } from "@/infrastructure/database/prisma.service";
 import { AuditService } from "@/infrastructure/audit/audit.service";
 
 import { MoveStageInput } from "./pipeline.types";
-import { ensureNotFinalStage, ensureSamePipeline } from "./pipeline.rules";
+import { ensureSamePipeline } from "./pipeline.rules";
 import { canMoveApplication } from "@/core/auth/abac";
 
 export const PipelineService = {
@@ -13,7 +13,11 @@ export const PipelineService = {
     const application = await PrismaService.client.application.findUnique({
       where: { id: applicationId },
       include: {
-        stage: true,
+        stage: {
+          include: {
+            version: true,
+          },
+        },
         jobPosting: true,
       },
     });
@@ -23,14 +27,18 @@ export const PipelineService = {
     // 2. Obtener stage destino
     const toStage = await PrismaService.client.pipelineStage.findUnique({
       where: { id: toStageId },
+      include: {
+        version: true,
+      },
     });
 
     if (!toStage) throw new Error("Target stage not found");
 
     const fromStage = application.stage;
 
+    if (!fromStage) throw new Error("Application has no current stage");
+
     // 3. Validaciones de negocio
-    ensureNotFinalStage(fromStage);
     ensureSamePipeline(fromStage, toStage);
 
     // 4. ABAC (CRÍTICO)

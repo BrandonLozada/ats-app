@@ -22,7 +22,11 @@ export const ApplicationService = {
       include: {
         pipeline: {
           include: {
-            stages: true,
+            versions: {
+              include: {
+                stages: true,
+              },
+            },
           },
         },
       },
@@ -42,10 +46,22 @@ export const ApplicationService = {
     const pipeline = job?.pipeline ?? null;
     if (!pipeline) throw new Error("Job has no pipeline assigned");
 
-    // 5. Obtener stage inicial (APPLIED o el de menor orden)
+    // 5. Obtener stage inicial
+    // Transitional compatibility: verify exactly one usable PipelineVersion exists or fail explicitly if ambiguous.
+    // TODO [I6-S3-T03]: Replace transitional resolution with canonical Recruiting module version resolver.
+    const versions = pipeline.versions ?? [];
+    if (versions.length === 0) {
+      throw new Error("Pipeline has no versions");
+    }
+    if (versions.length > 1) {
+      throw new Error("Ambiguous pipeline version: multiple versions exist for legacy job posting");
+    }
+
+    const stages = versions[0].stages;
     const initialStage =
-      pipeline.stages.find((s) => s.type === "APPLIED") ||
-      pipeline.stages.sort((a, b) => a.order - b.order)[0];
+      stages.find((s) => s.isInitial) ||
+      stages.find((s) => s.category === "APPLIED") ||
+      stages.slice().sort((a, b) => a.order - b.order)[0];
 
     if (!initialStage) {
       throw new Error("Pipeline has no stages");

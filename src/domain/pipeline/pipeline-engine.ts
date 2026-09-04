@@ -1,4 +1,5 @@
-import { StageType } from "@/generated/prisma/client";
+// Legacy prototype StageType (deprecated: superseded by StageCategory in Target Architecture)
+export type StageType = "APPLIED" | "SCREENING" | "INTERVIEW" | "OFFER" | "HIRED" | "REJECTED";
 
 export class PipelineEngine {
   static FINAL_STAGES: StageType[] = ["HIRED", "REJECTED"];

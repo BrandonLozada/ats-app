@@ -2,7 +2,6 @@ import { PrismaService } from "@/infrastructure/database/prisma.service";
 import { authorize } from "@/application/common/authorization";
 import { PERMISSIONS } from "@/domain/auth/permissions";
 import { AuditService } from "@/infrastructure/audit/audit.service";
-import { PipelineEngine } from "@/domain/pipeline/pipeline-engine";
 
 import { ApplicationNotFoundError } from "@/domain/application/application.errors";
 import type { MoveStageDTO } from "@/domain/application/application.types";
@@ -31,22 +30,20 @@ export async function moveStageUseCase(input: MoveStageDTO) {
 
   const nextStage = await prisma.pipelineStage.findUnique({
     where: { id: input.toStageId },
+    include: {
+      version: true,
+    },
   });
 
   if (!nextStage) {
     throw new Error("Target stage not found");
   }
 
-  // 2. Validar que pertenece al mismo pipeline
-  if (application.jobPosting.pipelineId !== nextStage.pipelineId) {
+  // 2. Validar que pertenece al mismo pipeline a través de la jerarquía real:
+  // PipelineStage -> PipelineVersion -> HiringPipeline
+  if (application.jobPosting.pipelineId !== nextStage.version.pipelineId) {
     throw new Error("Stage does not belong to job pipeline");
   }
-
-  // 3. Validación de negocio
-  PipelineEngine.validateTransition({
-    currentStageType: application.stage?.type,
-    nextStageType: nextStage.type,
-  });
 
   const fromStageId = application.stageId;
 
