@@ -93,7 +93,8 @@ model TenantMembership {
 
   tenant          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  membershipRoles MembershipRole[]
+  membershipRoles   MembershipRole[]
+  hiringTeamMembers HiringTeamMember[]
 
   @@unique([tenantId, userId])
   @@unique([tenantId, id])
@@ -313,9 +314,11 @@ model Department {
 
   tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   jobPostings JobPosting[]
+  vacancies   Vacancy[]
 
   @@unique([tenantId, slug])
   @@unique([tenantId, name])
+  @@unique([tenantId, id])
   @@index([tenantId])
   @@map("departments")
 }
@@ -335,6 +338,7 @@ model Tenant {
   memberships      TenantMembership[]
   pipelines        HiringPipeline[]
   pipelineVersions PipelineVersion[]
+  vacancies        Vacancy[]
 
   @@map("tenants")
 }
@@ -350,6 +354,7 @@ model LegalEntity {
 
   tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   locations Location[]
+  vacancies Vacancy[]
 
   @@unique([tenantId, name])
   @@unique([tenantId, id])
@@ -358,19 +363,21 @@ model LegalEntity {
 }
 
 model Location {
-  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId      String      @map("tenant_id") @db.Uuid
-  legalEntityId String      @map("legal_entity_id") @db.Uuid
-  name          String
-  code          String?     @map("code")
-  isActive      Boolean     @default(true) @map("is_active")
-  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String            @map("tenant_id") @db.Uuid
+  legalEntityId    String            @map("legal_entity_id") @db.Uuid
+  name             String
+  code             String?           @map("code")
+  isActive         Boolean           @default(true) @map("is_active")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  legalEntity   LegalEntity @relation(fields: [tenantId, legalEntityId], references: [tenantId, id], onDelete: Restrict)
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  legalEntity      LegalEntity       @relation(fields: [tenantId, legalEntityId], references: [tenantId, id], onDelete: Restrict)
+  vacancyLocations VacancyLocation[]
 
   @@unique([tenantId, legalEntityId, name])
+  @@unique([tenantId, legalEntityId, id])
   @@index([tenantId])
   @@index([legalEntityId])
   @@map("locations")
@@ -429,6 +436,7 @@ model PipelineVersion {
   tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   pipeline    HiringPipeline        @relation(fields: [tenantId, pipelineId], references: [tenantId, id], onDelete: Cascade)
   stages      PipelineStage[]
+  vacancies   Vacancy[]
 
   @@unique([pipelineId, version])
   @@unique([tenantId, id])
@@ -456,6 +464,79 @@ model PipelineStage {
   @@unique([pipelineVersionId, order])
   @@index([pipelineVersionId])
   @@map("pipeline_stages")
+}
+
+model Vacancy {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String            @map("tenant_id") @db.Uuid
+  departmentId      String            @map("department_id") @db.Uuid
+  legalEntityId     String            @map("legal_entity_id") @db.Uuid
+  pipelineVersionId String            @map("pipeline_version_id") @db.Uuid
+  title             String
+  slug              String
+  description       String?
+  employmentType    EmploymentType?   @map("employment_type")
+  isRemote          Boolean           @default(false) @map("is_remote")
+  openings          Int               @default(1)
+  status            VacancyStatus     @default(DRAFT)
+  publishedAt       DateTime?         @map("published_at") @db.Timestamptz(6)
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  department        Department        @relation(fields: [tenantId, departmentId], references: [tenantId, id], onDelete: Restrict)
+  legalEntity       LegalEntity       @relation(fields: [tenantId, legalEntityId], references: [tenantId, id], onDelete: Restrict)
+  pipelineVersion   PipelineVersion   @relation(fields: [tenantId, pipelineVersionId], references: [tenantId, id], onDelete: Restrict)
+  locations         VacancyLocation[]
+  hiringTeamMembers HiringTeamMember[]
+
+  @@unique([tenantId, slug])
+  @@unique([tenantId, id])
+  @@unique([tenantId, id, legalEntityId])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([departmentId])
+  @@index([legalEntityId])
+  @@index([pipelineVersionId])
+  @@map("vacancies")
+}
+
+model VacancyLocation {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String      @map("tenant_id") @db.Uuid
+  vacancyId     String      @map("vacancy_id") @db.Uuid
+  legalEntityId String      @map("legal_entity_id") @db.Uuid
+  locationId    String      @map("location_id") @db.Uuid
+  openings      Int
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  vacancy       Vacancy     @relation(fields: [tenantId, vacancyId, legalEntityId], references: [tenantId, id, legalEntityId], onDelete: Cascade)
+  location      Location    @relation(fields: [tenantId, legalEntityId, locationId], references: [tenantId, legalEntityId, id], onDelete: Restrict)
+
+  @@unique([vacancyId, locationId])
+  @@index([tenantId])
+  @@index([vacancyId])
+  @@index([locationId])
+  @@map("vacancy_locations")
+}
+
+model HiringTeamMember {
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String           @map("tenant_id") @db.Uuid
+  vacancyId          String           @map("vacancy_id") @db.Uuid
+  tenantMembershipId String           @map("tenant_membership_id") @db.Uuid
+  responsibility     HiringTeamRole
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  vacancy            Vacancy          @relation(fields: [tenantId, vacancyId], references: [tenantId, id], onDelete: Cascade)
+  membership         TenantMembership @relation(fields: [tenantId, tenantMembershipId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([vacancyId, tenantMembershipId])
+  @@index([tenantId])
+  @@index([vacancyId])
+  @@index([tenantMembershipId])
+  @@map("hiring_team_members")
 }
 
 model ApplicationStageHistory {
@@ -610,3 +691,21 @@ enum InterviewStatus {
 
   @@map("interview_status")
 }
+
+enum VacancyStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+  CLOSED
+
+  @@map("vacancy_status")
+}
+
+enum HiringTeamRole {
+  RECRUITER
+  HIRING_MANAGER
+  INTERVIEWER
+
+  @@map("hiring_team_roles")
+}
+
