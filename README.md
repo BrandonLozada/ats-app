@@ -1,5 +1,14 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Documentation
+
+| Document | Path |
+|---|---|
+| Architecture | `docs/architecture/target_architecture.md` |
+| ADRs | `docs/adr/` |
+| Implementation Plan | `docs/engineering/implementation_plan.md` |
+| AI Context | `docs/ai/AI_CONTEXT.md` |
+
 ## Getting Started
 
 First, run the development server:

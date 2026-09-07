@@ -43,7 +43,7 @@ next-env.d.ts
 # prisma
 /src/generated/prisma
 
-# data
+# data (scratch/temporary data only — canonical docs are in /docs/)
 /data
 /data/*
 
