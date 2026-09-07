@@ -6,6 +6,8 @@ export {
   updateDraftPipelineVersion,
   publishPipelineVersion,
   resolvePipelineVersion,
+  createVacancy,
+  publishVacancy,
 } from "./composition.server";
 
 export type {
@@ -21,5 +23,13 @@ export type {
   UpdateDraftPipelineVersionInput,
   PublishPipelineVersionInput,
   ResolvePipelineVersionInput,
+  VacancyStatus,
+  EmploymentType,
+  VacancyLocationRecord,
+  VacancyRecord,
+  VacancyError,
+  CreateVacancyInput,
+  PublishVacancyInput,
 } from "./public";
+
 

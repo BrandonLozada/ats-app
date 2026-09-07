@@ -16,3 +16,15 @@ export type {
   ResolvePipelineVersionInput,
   ResolveLatestPublishedVersionInput,
 } from "./application/pipeline/resolve-pipeline-version";
+
+export type {
+  VacancyStatus,
+  EmploymentType,
+  VacancyLocationRecord,
+  VacancyRecord,
+} from "./application/vacancy/vacancy.types";
+
+export type { VacancyError } from "./application/vacancy/vacancy.errors";
+export type { CreateVacancyInput } from "./application/vacancy/create-vacancy";
+export type { PublishVacancyInput } from "./application/vacancy/publish-vacancy";
+
