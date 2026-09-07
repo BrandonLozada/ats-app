@@ -31,6 +31,8 @@ describe("Recruiting Module Public Boundaries", () => {
     expect(typeof recruitingServer.resolvePipelineVersion).toBe("function");
     expect(typeof recruitingServer.createVacancy).toBe("function");
     expect(typeof recruitingServer.publishVacancy).toBe("function");
+    expect(typeof recruitingServer.findPublishedVacancies).toBe("function");
+    expect(typeof recruitingServer.getPublicVacancyDetails).toBe("function");
   });
 
   it("does not export PipelineAuthContext from public or public.server", () => {
@@ -38,12 +40,14 @@ describe("Recruiting Module Public Boundaries", () => {
     expect("PipelineAuthContext" in recruitingServer).toBe(false);
   });
 
-  it("does not leak Prisma internals or database client via public.server", () => {
+  it("does not leak Prisma internals, database client, or query adapter via public.server", () => {
     expect("prisma" in recruitingServer).toBe(false);
     expect("PrismaPipelineRepository" in recruitingServer).toBe(false);
     expect("prismaPipelineRepository" in recruitingServer).toBe(false);
     expect("PrismaVacancyRepository" in recruitingServer).toBe(false);
     expect("prismaVacancyRepository" in recruitingServer).toBe(false);
+    expect("findPublishedVacanciesQuery" in recruitingServer).toBe(false);
+    expect("getPublicVacancyDetailsQuery" in recruitingServer).toBe(false);
     expect("db" in recruitingServer).toBe(false);
     expect("PrismaClient" in recruitingServer).toBe(false);
   });
@@ -52,8 +56,21 @@ describe("Recruiting Module Public Boundaries", () => {
     expect("createPipeline" in recruitingClient).toBe(false);
     expect("createVacancy" in recruitingClient).toBe(false);
     expect("publishVacancy" in recruitingClient).toBe(false);
+    expect("findPublishedVacancies" in recruitingClient).toBe(false);
+    expect("getPublicVacancyDetails" in recruitingClient).toBe(false);
+    expect("findPublishedVacanciesQuery" in recruitingClient).toBe(false);
+    expect("getPublicVacancyDetailsQuery" in recruitingClient).toBe(false);
     expect("prisma" in recruitingClient).toBe(false);
     expect("DATABASE_URL" in recruitingClient).toBe(false);
+  });
+
+  it("infrastructure query adapter enforces server-only", () => {
+    const queryFile = path.resolve(
+      __dirname,
+      "infrastructure/queries/prisma-vacancy-public-read.ts"
+    );
+    const content = fs.readFileSync(queryFile, "utf-8");
+    expect(content).toMatch(/^import\s+["']server-only["'];/);
   });
 });
 
@@ -108,5 +125,15 @@ describe("Recruiting Module Architectural Boundaries", () => {
       expect(content).not.toContain("@prisma/client");
     }
   });
+
+  it("ensures no VacancyPublicReadRepositoryPort remains in application layer (ADR-020)", () => {
+    const appDir = path.join(recruitingDir, "application");
+    const appFiles = getAllSourceTsFiles(appDir);
+    for (const file of appFiles) {
+      const content = fs.readFileSync(file, "utf-8");
+      expect(content).not.toContain("VacancyPublicReadRepositoryPort");
+    }
+  });
 });
+
 

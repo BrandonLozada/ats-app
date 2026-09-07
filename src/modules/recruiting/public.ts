@@ -28,3 +28,16 @@ export type { VacancyError } from "./application/vacancy/vacancy.errors";
 export type { CreateVacancyInput } from "./application/vacancy/create-vacancy";
 export type { PublishVacancyInput } from "./application/vacancy/publish-vacancy";
 
+export type {
+  PublicVacancyLocation,
+  PublicVacancyDepartment,
+  PublicVacancyLegalEntity,
+  PublicVacancySummary,
+  PublicVacancyDetails,
+  GetPublicVacancyDetailsInput,
+} from "./application/vacancy/vacancy-public.types";
+
+export type { PublicVacancyReadError } from "./application/vacancy/vacancy-public.errors";
+
+
+

@@ -12,6 +12,18 @@ import {
 } from "./application/pipeline/resolve-pipeline-version";
 import { createVacancyUseCase } from "./application/vacancy/create-vacancy";
 import { publishVacancyUseCase } from "./application/vacancy/publish-vacancy";
+import {
+  findPublishedVacanciesQuery,
+  getPublicVacancyDetailsQuery,
+} from "./infrastructure/queries/prisma-vacancy-public-read";
+import type { PublicTenantContext } from "@/modules/organization/public";
+import type {
+  GetPublicVacancyDetailsInput,
+  PublicVacancyDetails,
+  PublicVacancySummary,
+} from "./application/vacancy/vacancy-public.types";
+import type { PublicVacancyReadError } from "./application/vacancy/vacancy-public.errors";
+import { Result, ok, err } from "@/platform/shared/result";
 
 const prismaPipelineRepository = new PrismaPipelineRepository();
 const prismaVacancyRepository = new PrismaVacancyRepository();
@@ -34,4 +46,43 @@ export const resolveLatestPublishedPipelineVersion =
 
 export const createVacancy = createVacancyUseCase(prismaVacancyRepository);
 export const publishVacancy = publishVacancyUseCase(prismaVacancyRepository);
+
+export async function findPublishedVacancies(
+  ctx: PublicTenantContext
+): Promise<Result<readonly PublicVacancySummary[], never>> {
+  const vacancies = await findPublishedVacanciesQuery(ctx.tenantId);
+  return ok(vacancies);
+}
+
+export async function getPublicVacancyDetails(
+  ctx: PublicTenantContext,
+  input: GetPublicVacancyDetailsInput
+): Promise<Result<PublicVacancyDetails, PublicVacancyReadError>> {
+  if (!input || typeof input.slug !== "string") {
+    return err({
+      code: "VACANCY_NOT_FOUND",
+      message: "Vacancy not found.",
+    });
+  }
+
+  const trimmedSlug = input.slug.trim();
+  if (trimmedSlug.length === 0) {
+    return err({
+      code: "VACANCY_NOT_FOUND",
+      message: "Vacancy not found.",
+    });
+  }
+
+  const vacancy = await getPublicVacancyDetailsQuery(ctx.tenantId, trimmedSlug);
+  if (!vacancy) {
+    return err({
+      code: "VACANCY_NOT_FOUND",
+      message: "Vacancy not found.",
+    });
+  }
+
+  return ok(vacancy);
+}
+
+
 

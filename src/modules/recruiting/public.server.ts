@@ -8,6 +8,8 @@ export {
   resolvePipelineVersion,
   createVacancy,
   publishVacancy,
+  findPublishedVacancies,
+  getPublicVacancyDetails,
 } from "./composition.server";
 
 export type {
@@ -30,6 +32,14 @@ export type {
   VacancyError,
   CreateVacancyInput,
   PublishVacancyInput,
+  PublicVacancyLocation,
+  PublicVacancyDepartment,
+  PublicVacancyLegalEntity,
+  PublicVacancySummary,
+  PublicVacancyDetails,
+  PublicVacancyReadError,
+  GetPublicVacancyDetailsInput,
 } from "./public";
+
 
 

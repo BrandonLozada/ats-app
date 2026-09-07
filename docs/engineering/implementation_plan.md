@@ -578,11 +578,11 @@ graph TD
   - `prisma/seed.ts` untouched.
   - Legacy `JobPosting` and callers untouched.
   - Live migrated vacancy `255b4499-7552-4bc5-b395-c6cdc7bc108a` ("Enfermera General") 100% untouched.
-**Validation:** `pnpm test` (184 passed across 19 suites), `pnpm test:integration` (55 passed across 6 suites), `pnpm typecheck` (0 errors in recruiting module or new tests, baseline unchanged), `pnpm lint` (0 errors in recruiting module or new tests), `pnpm db:validate` (Valid), `pnpm db:migrate:status` (5 up to date).
+**Validation:** `pnpm test` (186 passed across 19 suites), `pnpm test:integration` (55 passed across 6 suites), `pnpm typecheck` (0 errors in recruiting module or new tests, baseline unchanged), `pnpm lint` (0 errors in recruiting module or new tests), `pnpm db:validate` (Valid), `pnpm db:migrate:status` (5 up to date).
 
 **Task ID:** I6-S4-T04
 **Title:** Vacancy Public Reads & Security
-**Status:** NOT STARTED (READY — Dependency I6-S4-T03 Satisfied)
+**Status:** DONE / VERIFIED
 **Risk:** HIGH
 **Depends On:** I6-S4-T03
 **Blocks:** Stage 7
@@ -590,9 +590,33 @@ graph TD
 **Files / Areas:** `src/modules/recruiting/`
 **Objective:** Expose reads for Careers portal safely.
 **Acceptance Criteria:**
-- `findPublishedVacancies` and `getPublicVacancyDetails` implemented.
-- Tenant isolation integration tests prove cross-tenant boundaries.
-**Validation:** `pnpm test:integration`
+- **ADR-020 Lightweight CQRS Read Architecture:**
+  - Read flow conforms strictly to ADR-020: Presentation -> Module public server API -> infrastructure read adapter -> Prisma projection -> DTO.
+  - Dedicated query adapter `src/modules/recruiting/infrastructure/queries/prisma-vacancy-public-read.ts` (`import "server-only"`).
+  - No application query use cases, no read repository port, no QueryBus, no generic repository.
+  - `PrismaVacancyRepository` remains strictly command-only, implementing only `VacancyRepositoryPort`.
+  - Client-safe boundary `public.ts` exports pure public DTOs only; `public.server.ts` exports server read capabilities without leaking the infrastructure adapter.
+- **Anonymous Public Reads (`findPublishedVacancies`, `getPublicVacancyDetails`):**
+  - Governed strictly by `PublicTenantContext` (`ctx.tenantId`) resolved from Organization; does NOT require `AuthenticatedContext` or internal permissions.
+  - Zero acceptance of caller-supplied `tenantId` authority.
+- **Status Security & Visibility:**
+  - Public Vacancy is readable ONLY when `status = 'PUBLISHED'`.
+  - `DRAFT`, `PAUSED`, and `CLOSED` vacancies are invisible in listing and return `VACANCY_NOT_FOUND` in details.
+  - Historical migrated vacancy with `publishedAt = null` is visible when `status = 'PUBLISHED'`.
+- **Tenant Isolation:**
+  - All queries strictly scoped by `PublicTenantContext.tenantId`.
+  - Cross-tenant lookups fail closed and return `VACANCY_NOT_FOUND` with no distinction from non-existent or draft states (zero information leakage).
+- **Public Projections (`PublicVacancySummary`, `PublicVacancyDetails`):**
+  - Exposes only safe public Careers fields: `id`, `slug`, `title`, `description`, `employmentType`, `isRemote`, `openings`, `publishedAt`, `department` (`id`, `name`), `legalEntity` (`id`, `name`), and `locations` (`id`, `name`, `openings`).
+  - Strict exclusion of internal recruiting data: `tenantId`, `pipelineVersionId`, `hiringTeamMembers`, `tenantMembershipId`, `status`, and database audit timestamps.
+- **Deterministic Ordering:**
+  - Listing ordered deterministically by `publishedAt DESC NULLS LAST`, `createdAt DESC`, `id ASC`.
+- **Testing & Verification:**
+  - 14 real PostgreSQL integration tests in `tests/integration/vacancy-public-reads.integration.test.ts` (namespace `94000000-...`) verifying multi-tenant listing isolation, cross-tenant detail isolation, hidden state rejection, historical `publishedAt = null` inclusion, projection security, and live `Enfermera General` anonymous reading.
+  - Boundary tests in `recruiting.boundary.test.ts` verifying server exports, client-safe separation, server-only query adapter, and zero read ports in application layer.
+**Validation:** `pnpm test` (202 passed across 20 suites), `pnpm test:integration` (70 passed across 7 suites), `pnpm typecheck` (22 baseline errors, 0 regressions), `pnpm lint` (20 baseline errors, 55 warnings, 0 regressions), targeted ESLint clean.
+
+**Stage 4 — Vacancy Core Complete**: All exit criteria achieved. Published Vacancy can be tenant-safely created, validated, published, and publicly read through the Recruiting module boundary with strict multi-tenant isolation and zero internal data leakage.
 
 ---
 

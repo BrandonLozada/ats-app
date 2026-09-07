@@ -253,3 +253,4 @@ export class PrismaVacancyRepository implements VacancyRepositoryPort {
     return updated ? mapToVacancyRecord(updated) : null;
   }
 }
+
