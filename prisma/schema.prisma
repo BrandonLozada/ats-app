@@ -20,7 +20,7 @@ model User {
   applicationsCreated Application[]             @relation("ApplicationCreatedBy")
   candidatesCreated   Candidate[]               @relation("CandidateCreatedBy")
   candidatesUpdated   Candidate[]               @relation("CandidateUpdatedBy")
-  candidate           Candidate?                @relation("UserCandidate")
+  candidates          Candidate[]               @relation("CandidateAuthUser")
   jobPostingsCreated  JobPosting[]              @relation("JobPostingCreatedBy")
   jobPostingsUpdated  JobPosting[]              @relation("JobPostingUpdatedBy")
   sessions            Session[]
@@ -165,35 +165,97 @@ model RolePermission {
 }
 
 model Candidate {
-  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id               String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String                  @map("tenant_id") @db.Uuid
+  authUserId       String?                 @map("auth_user_id") @db.Uuid
   name             String
-  firstName        String             @map("first_name")
-  lastName         String?            @map("last_name")
-  email            String?
+  firstName        String                  @map("first_name")
+  lastName         String?                 @map("last_name")
+  email            String
+  emailNormalized  String                  @map("email_normalized")
   phone            String?
-  status           CandidateStatus    @default(ACTIVE)
-  sourceId         String?            @map("source_id") @db.Uuid
-  cvUrl            String?            @map("cv_url")
-  cvRaw            String?            @map("cv_raw")
-  cvParsedData     Json?              @map("cv_parsed_data")
-  cvParsedAt       DateTime?          @map("cv_parsedAt") @db.Timestamptz(6)
-  dataCompleteness Int                @default(0) @map("data_completeness")
-  deletedAt        DateTime?          @map("deleted_at") @db.Timestamptz(6)
-  userId           String?            @unique @map("user_id") @db.Uuid
-  createdById      String?            @map("created_by_id") @db.Uuid
-  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedById      String?            @map("updated_by_id") @db.Uuid
-  updatedAt        DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  phoneNormalized  String?                 @map("phone_normalized")
+  status           CandidateStatus         @default(ACTIVE)
+  sourceId         String?                 @map("source_id") @db.Uuid
+  cvUrl            String?                 @map("cv_url")
+  cvRaw            String?                 @map("cv_raw")
+  cvParsedData     Json?                   @map("cv_parsed_data")
+  cvParsedAt       DateTime?               @map("cv_parsedAt") @db.Timestamptz(6)
+  dataCompleteness Int                     @default(0) @map("data_completeness")
+  deletedAt        DateTime?               @map("deleted_at") @db.Timestamptz(6)
+  createdById      String?                 @map("created_by_id") @db.Uuid
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedById      String?                 @map("updated_by_id") @db.Uuid
+  updatedAt        DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant           Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  authUser         User?                   @relation("CandidateAuthUser", fields: [authUserId], references: [id], onDelete: SetNull)
   applications     Application[]
   leads            CandidateLead[]
-  createdBy        User?              @relation("CandidateCreatedBy", fields: [createdById], references: [id])
-  source           ApplicationSource? @relation("CandidateSource", fields: [sourceId], references: [id])
-  updatedBy        User?              @relation("CandidateUpdatedBy", fields: [updatedById], references: [id])
-  user             User?              @relation("UserCandidate", fields: [userId], references: [id])
+  provenance       DataProvenance[]
+  privacyAcks      PrivacyAcknowledgment[]
+  createdBy        User?                   @relation("CandidateCreatedBy", fields: [createdById], references: [id])
+  source           ApplicationSource?      @relation("CandidateSource", fields: [sourceId], references: [id])
+  updatedBy        User?                   @relation("CandidateUpdatedBy", fields: [updatedById], references: [id])
 
-  @@index([email])
+  @@unique([tenantId, id])
+  @@unique([tenantId, authUserId])
+  @@index([tenantId])
+  @@index([tenantId, emailNormalized])
+  @@index([tenantId, phoneNormalized])
   @@index([sourceId])
   @@map("candidates")
+}
+
+model DataProvenance {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  candidateId String    @map("candidate_id") @db.Uuid
+  source      String
+  channel     String
+  collectedAt DateTime  @default(now()) @map("collected_at") @db.Timestamptz(6)
+
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  candidate   Candidate @relation(fields: [tenantId, candidateId], references: [tenantId, id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, candidateId])
+  @@map("data_provenance")
+}
+
+model PrivacyPolicyVersion {
+  id              String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String                  @map("tenant_id") @db.Uuid
+  version         String
+  content         String
+  publishedAt     DateTime?               @map("published_at") @db.Timestamptz(6)
+  isActive        Boolean                 @default(false) @map("is_active")
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant          Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  acknowledgments PrivacyAcknowledgment[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, version])
+  @@index([tenantId, isActive])
+  @@map("privacy_policy_versions")
+}
+
+model PrivacyAcknowledgment {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String               @map("tenant_id") @db.Uuid
+  candidateId     String               @map("candidate_id") @db.Uuid
+  policyVersionId String               @map("policy_version_id") @db.Uuid
+  acknowledgedAt  DateTime             @default(now()) @map("acknowledged_at") @db.Timestamptz(6)
+
+  tenant          Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  candidate       Candidate            @relation(fields: [tenantId, candidateId], references: [tenantId, id], onDelete: Cascade)
+  policyVersion   PrivacyPolicyVersion @relation(fields: [tenantId, policyVersionId], references: [tenantId, id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([tenantId, candidateId])
+  @@index([tenantId, policyVersionId])
+  @@map("privacy_acknowledgments")
 }
 
 model CandidateLead {
@@ -338,7 +400,11 @@ model Tenant {
   memberships      TenantMembership[]
   pipelines        HiringPipeline[]
   pipelineVersions PipelineVersion[]
-  vacancies        Vacancy[]
+  vacancies             Vacancy[]
+  candidates            Candidate[]
+  dataProvenances       DataProvenance[]
+  privacyPolicyVersions PrivacyPolicyVersion[]
+  privacyAcknowledgments PrivacyAcknowledgment[]
 
   @@map("tenants")
 }

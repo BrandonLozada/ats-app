@@ -11,10 +11,26 @@ export async function applyToJob(jobPostingId: string) {
 
   if (!session) throw new Error("Unauthorized");
 
-  // 1. Obtener candidato existente (enlace con usuario)
+  // Deterministically resolve tenant from JobPosting
+  const jobPosting = await PrismaService.client.jobPosting.findUnique({
+    where: { id: jobPostingId },
+    select: {
+      department: { select: { tenantId: true } },
+      pipeline: { select: { tenantId: true } },
+    },
+  });
+  const tenantId = jobPosting?.department?.tenantId ?? jobPosting?.pipeline?.tenantId;
+  if (!tenantId) {
+    throw new Error("Transitional applyToJob: Unable to deterministically resolve tenantId for job posting.");
+  }
+
+  // 1. Obtener candidato existente (enlace con usuario bajo tenant)
   const candidate = await PrismaService.client.candidate.findUnique({
     where: {
-      userId: session.user.id,
+      tenantId_authUserId: {
+        tenantId,
+        authUserId: session.user.id,
+      },
     },
   });
 

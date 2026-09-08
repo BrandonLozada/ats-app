@@ -25,9 +25,21 @@ import { ApplicationService } from "@/core/application/application.service";
 import { PrismaService } from "@/infrastructure/database/prisma.service";
 
 export async function applyToJobAction(jobPostingId: string) {
-  const ctx = await createAppContext();
+  const job = await PrismaService.client.jobPosting.findUnique({
+    where: { id: jobPostingId },
+    select: {
+      department: { select: { tenantId: true } },
+      pipeline: { select: { tenantId: true } },
+    },
+  });
+  const tenantId = job?.department?.tenantId ?? job?.pipeline?.tenantId;
+  if (!tenantId) {
+    throw new Error("Transitional applyToJobAction: Unable to deterministically resolve tenantId for job posting.");
+  }
 
-  const candidate = await candidateService.getByUserId(ctx.userId);
+  const ctx = await createAppContext(tenantId);
+
+  const candidate = await candidateService.getByUserId(tenantId, ctx.userId);
 
   if (!candidate) throw new Error("Candidate not found");
 
@@ -41,14 +53,21 @@ export async function applyToJobAction(jobPostingId: string) {
   );
 }
 
-export async function getMyApplications() {
-  const ctx = await createAppContext();
+export async function getMyApplications(tenantId?: string) {
+  if (!tenantId || tenantId.trim() === "") {
+    throw new Error("Transitional getMyApplications: tenantId is required to query candidate applications.");
+  }
+  const ctx = await createAppContext(tenantId);
 
-  const candidate = await candidateService.getByUserId(ctx.userId);
+  const candidate = await candidateService.getByUserId(tenantId, ctx.userId);
+
+  if (!candidate) {
+    return [];
+  }
 
   return PrismaService.client.application.findMany({
     where: {
-      candidateId: candidate!.id,
+      candidateId: candidate.id,
     },
     include: {
       jobPosting: true,

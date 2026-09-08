@@ -2,13 +2,29 @@ import { CandidateRepository } from "./candidate.repository";
 import { calculateCompleteness, canBeActivated } from "./candidate.rules";
 import { AuditService } from "@/infrastructure/audit/audit.service";
 import { CreateCandidateInput, UpdateCandidateInput } from "./candidate.types";
+import { normalizeEmail } from "@/shared/utils/normalize-email";
 
 export const CandidateService = {
   async create(input: CreateCandidateInput, userId?: string) {
+    const tenantId = (input as { tenantId?: string }).tenantId;
+    if (!tenantId || tenantId.trim() === "") {
+      throw new Error("Transitional CandidateService.create: tenantId is required and cannot be empty.");
+    }
+    if (!input.email || input.email.trim() === "") {
+      throw new Error("Transitional CandidateService.create: email is required and cannot be empty.");
+    }
+    const normalizedEmail = normalizeEmail(input.email);
+    if (!normalizedEmail || normalizedEmail.trim() === "") {
+      throw new Error("Transitional CandidateService.create: normalizedEmail cannot be empty.");
+    }
+
     const completeness = calculateCompleteness(input);
 
     const candidate = await CandidateRepository.create({
       ...input,
+      email: input.email,
+      emailNormalized: normalizedEmail,
+      tenantId,
       dataCompleteness: completeness,
       createdById: userId,
     });

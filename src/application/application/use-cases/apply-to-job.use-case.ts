@@ -7,75 +7,14 @@ import { normalizeEmail } from "@/shared/utils/normalize-email";
 export async function applyToJobUseCase(input: unknown) {
   const prisma = PrismaService.client;
 
+  // 1. Validate input
   const data = applyToJobSchema.parse(input);
 
-  // Contexto (puede no haber sesión)
-  let ctx: Awaited<ReturnType<typeof createAppContext>> | null = null;
-
-  try {
-    ctx = await createAppContext();
-  } catch {
-    ctx = null;
-  }
-
-  const normalizedEmail = normalizeEmail(data.email || "");
-
-  // 1. Buscar candidate existente
-  let candidate = null;
-
-  if (normalizedEmail) {
-    candidate = await prisma.candidate.findFirst({
-      where: {
-        email: normalizedEmail,
-        deletedAt: null,
-      },
-    });
-  }
-
-  // 2. Crear candidate si no existe
-  if (!candidate) {
-    candidate = await prisma.candidate.create({
-      data: {
-        name: data.name,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: normalizedEmail,
-        phone: data.phone,
-        cvUrl: data.cvUrl,
-        sourceId: data.sourceId,
-        userId: ctx?.userId ?? null,
-      },
-    });
-  }
-
-  // 3. Linkear user ↔ candidate (lazy linking)
-  if (ctx?.userId && !candidate.userId) {
-    candidate = await prisma.candidate.update({
-      where: { id: candidate.id },
-      data: {
-        userId: ctx.userId,
-      },
-    });
-  }
-
-  // 4. Evitar duplicados
-  const existingApplication = await prisma.application.findUnique({
-    where: {
-      candidateId_jobPostingId: {
-        candidateId: candidate.id,
-        jobPostingId: data.jobPostingId,
-      },
-    },
-  });
-
-  if (existingApplication) {
-    return existingApplication;
-  }
-
-  // 5. Obtener job + pipeline
+  // 2. Load required legacy JobPosting context
   const job = await prisma.jobPosting.findUnique({
     where: { id: data.jobPostingId },
     include: {
+      department: { select: { tenantId: true } },
       pipeline: {
         include: {
           versions: {
@@ -90,6 +29,76 @@ export async function applyToJobUseCase(input: unknown) {
 
   if (!job) {
     throw new Error("Job not found");
+  }
+
+  // 3. Deterministically resolve its Tenant
+  const tenantId = job.department?.tenantId ?? job.pipeline?.tenantId;
+  if (!tenantId || tenantId.trim() === "") {
+    throw new Error("Transitional applyToJobUseCase: Unable to deterministically resolve tenantId for job posting.");
+  }
+
+  // Context (session optional, scoped to tenant)
+  let ctx: Awaited<ReturnType<typeof createAppContext>> | null = null;
+  try {
+    ctx = await createAppContext(tenantId);
+  } catch {
+    ctx = null;
+  }
+
+  // 4. Normalize email
+  if (!data.email || data.email.trim() === "") {
+    throw new Error("Transitional applyToJobUseCase: Candidate email is required.");
+  }
+  const normalizedEmail = normalizeEmail(data.email);
+  if (!normalizedEmail || normalizedEmail.trim() === "") {
+    throw new Error("Transitional applyToJobUseCase: Valid email is required.");
+  }
+
+  // 5. Candidate lookup by tenantId + emailNormalized
+  let candidate = await prisma.candidate.findFirst({
+    where: {
+      tenantId,
+      emailNormalized: normalizedEmail,
+      deletedAt: null,
+    },
+  });
+
+  // 6. Candidate create with that exact tenantId
+  if (!candidate) {
+    candidate = await prisma.candidate.create({
+      data: {
+        tenantId,
+        name: data.name,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: normalizedEmail,
+        emailNormalized: normalizedEmail,
+        phone: data.phone,
+        cvUrl: data.cvUrl,
+        sourceId: data.sourceId,
+        authUserId: ctx?.userId ?? null,
+      },
+    });
+  }
+
+  // 7. Optional authUserId linking only within that Candidate/Tenant
+  if (ctx?.userId && !candidate.authUserId) {
+    const existingClaim = await prisma.candidate.findUnique({
+      where: {
+        tenantId_authUserId: {
+          tenantId,
+          authUserId: ctx.userId,
+        },
+      },
+    });
+    if (!existingClaim) {
+      candidate = await prisma.candidate.update({
+        where: { id: candidate.id },
+        data: {
+          authUserId: ctx.userId,
+        },
+      });
+    }
   }
 
   // 6. Obtener stage inicial

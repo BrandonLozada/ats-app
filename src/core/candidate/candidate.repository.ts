@@ -12,10 +12,18 @@ export const CandidateRepository = {
       data,
     }),
 
-  findByEmail: (email: string) =>
-    PrismaService.client.candidate.findUnique({
-      where: { email },
-    }),
+  findByEmail: async (tenantId: string, emailNormalized: string) => {
+    if (!tenantId || tenantId.trim() === "") {
+      throw new Error("Transitional CandidateRepository.findByEmail: tenantId is required.");
+    }
+    return PrismaService.client.candidate.findFirst({
+      where: {
+        tenantId,
+        emailNormalized,
+        deletedAt: null,
+      },
+    });
+  },
 
   findByPhone(phone: string) {
     return PrismaService.client.candidate.findFirst({

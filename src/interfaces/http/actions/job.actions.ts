@@ -144,6 +144,21 @@ export async function getPublicJobs({
 }
 
 export async function getJobDetail(jobId: string, userId?: string) {
+  let tenantId: string | null = null;
+  if (userId) {
+    const jobMeta = await PrismaService.client.jobPosting.findUnique({
+      where: { id: jobId },
+      select: {
+        department: { select: { tenantId: true } },
+        pipeline: { select: { tenantId: true } },
+      },
+    });
+    tenantId = jobMeta?.department?.tenantId ?? jobMeta?.pipeline?.tenantId ?? null;
+    if (!tenantId) {
+      throw new Error("Transitional getJobDetail: Unable to deterministically resolve tenantId for job posting.");
+    }
+  }
+
   return PrismaService.client.jobPosting.findUnique({
     where: { id: jobId },
 
@@ -156,11 +171,12 @@ export async function getJobDetail(jobId: string, userId?: string) {
           applications: true,
         },
       },
-      applications: userId
+      applications: (userId && tenantId)
         ? {
             where: {
               candidate: {
-                userId,
+                tenantId,
+                authUserId: userId,
               },
             },
             select: { id: true },
@@ -245,6 +261,21 @@ export async function getJobById({
   jobId: string;
   userId?: string;
 }) {
+  let tenantId: string | null = null;
+  if (userId) {
+    const jobMeta = await PrismaService.client.jobPosting.findUnique({
+      where: { id: jobId },
+      select: {
+        department: { select: { tenantId: true } },
+        pipeline: { select: { tenantId: true } },
+      },
+    });
+    tenantId = jobMeta?.department?.tenantId ?? jobMeta?.pipeline?.tenantId ?? null;
+    if (!tenantId) {
+      throw new Error("Transitional getJobById: Unable to deterministically resolve tenantId for job posting.");
+    }
+  }
+
   const job = await PrismaService.client.jobPosting.findUnique({
     where: { id: jobId },
 
@@ -259,11 +290,12 @@ export async function getJobById({
         },
       },
 
-      applications: userId
+      applications: (userId && tenantId)
         ? {
             where: {
               candidate: {
-                userId,
+                tenantId,
+                authUserId: userId,
               },
             },
             select: { id: true },

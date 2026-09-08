@@ -628,16 +628,44 @@ graph TD
 
 **Task ID:** I6-S5-T01
 **Title:** MODIFY Candidate Schema & Privacy Models
+**Status:** DONE / VERIFIED
 **Risk:** HIGH
 **Depends On:** I6-S2-T05
 **Blocks:** I6-S5-T02
 **Can Run In Parallel With:** Stage 4
-**Files / Areas:** `schema.prisma`
+**Files / Areas:** `prisma/schema.prisma`, `prisma/migrations/0006_candidate_privacy_foundation/`
 **Objective:** Normalization, non-unique email, and privacy support.
 **Acceptance Criteria:**
-- Email uniqueness removed from Candidate.
-- ADD `DataProvenance`, `PrivacyPolicyVersion`, `PrivacyAcknowledgment`.
-**Validation:** `pnpm db:validate`
+- **Candidate Identity & Tenant Scoping:**
+  - `Candidate != User`: Candidate is an independent, tenant-scoped entity with required `tenantId` (FK to Tenant with `onDelete: Cascade`) and compound alternate key `@@unique([tenantId, id])`.
+  - Optional account-claiming link `authUserId String? @map("auth_user_id") @db.Uuid` matching native PostgreSQL `uuid` type of `User.id`.
+  - ADR-005 account-claiming invariant enforced at database constraint level: `@@unique([tenantId, authUserId])` (a Better Auth User may claim at most one Candidate per Tenant).
+- **Candidate Email & Phone Semantics:**
+  - Candidate email and phone are strictly NON-UNIQUE.
+  - Canonical contract: `email String`, `emailNormalized String @map("email_normalized")`, `phone String?`, `phoneNormalized String? @map("phone_normalized")`.
+  - Soft-deduplication indexes: `@@index([tenantId, emailNormalized])` and `@@index([tenantId, phoneNormalized])`.
+  - Global `user_id` unique index removed; legacy `candidates_email_idx` removed.
+- **Migration Semantics & Safety Invariants:**
+  - `user_id → auth_user_id` is a value-preserving rename via `ALTER TABLE "candidates" RENAME COLUMN "user_id" TO "auth_user_id";` (the column is never dropped or recreated, preserving existing Better Auth account-claim linkages).
+  - Unexpected pre-existing Candidate rows fail closed: Migration 0006 includes an explicit PL/pgSQL precondition guard (`IF EXISTS (SELECT 1 FROM "candidates" LIMIT 1) THEN RAISE EXCEPTION 'I6-S5-T01 BLOCKED: Candidate rows exist; controlled tenant/normalization backfill required before migration 0006'; END IF;`) ensuring fresh or verified-empty databases succeed while unexpected legacy Candidate rows halt migration safely prior to non-deterministic backfills.
+  - Tenant-leading indexes: Secondary lookup indexes on `DataProvenance` (`@@index([tenantId, candidateId])`) and `PrivacyAcknowledgment` (`@@index([tenantId, candidateId])`, `@@index([tenantId, policyVersionId])`) strictly enforce `tenantId` as leading key; standalone non-tenant indexes were removed.
+- **Transitional Legacy Compatibility & Tenant Scoping:**
+  - All Candidate reads by `authUserId` require and enforce `tenantId` (querying `tenantId_authUserId`).
+  - All Candidate reads by `emailNormalized` require and enforce `tenantId` (`tenantId` + `emailNormalized`).
+  - All Candidate creates require real, non-empty `tenantId` (no fallback `""`) and required normalized email (no fallback `""`).
+  - In `applyToJobUseCase`, ordering corrected minimally: validate input → load required legacy JobPosting context → deterministically resolve its Tenant (via `Department.tenantId` or `HiringPipeline.tenantId`) → normalize email → Candidate lookup by `tenantId` + `emailNormalized` → Candidate create with exact `tenantId` → optional `authUserId` linking only within that Candidate/Tenant → continue existing legacy Application flow. If JobPosting cannot resolve tenant, fails closed.
+  - In `job.actions.ts` (`getJobDetail`, `getJobById`) and `actions.ts` (`applyToJob`), JobPosting tenant is deterministically resolved and Candidate lookup is scoped to `tenantId` + `authUserId`; missing tenant fails closed with explicit error.
+  - In `candidateService.getByUserId(tenantId, userId)`, tenant scope is required and queries `tenantId_authUserId` compound key.
+- **Scope & Data Integrity:**
+  - Existing database inspection confirmed: 0 Candidate, 0 CandidateLead, 0 Application, and 0 User records.
+  - Zero modifications to `CandidateLead` (deferred to T02) and `Application` schema (deferred to Stage 6).
+  - Seed file untouched (`seed changed: NO`).
+- **Migration & Replay:**
+  - Migration `0006_candidate_privacy_foundation` verified with clean replay of complete migration chain `0001 -> 0002 -> 0003 -> 0004 -> 0005 -> 0006` against clean PostgreSQL schema with 0 drift.
+  - Precondition guard tested and confirmed to block migration when pre-existing Candidate rows exist.
+- **Tests & Verification:**
+  - 21 real PostgreSQL integration tests in `tests/integration/candidate-privacy-constraints.integration.test.ts` (namespace `95000000-...`) verifying same-tenant duplicate emails, cross-tenant duplicate emails, optional `authUserId` (null, valid, invalid FK, multi-tenant reuse, same-tenant duplication rejection), cross-tenant FK rejection for provenance and acknowledgments, multiple provenance events, historical policy versioning, restrict-on-delete semantics, migration 0006 static AST invariants (value-preserving rename, no drop column, fail-closed guard, tenant-leading indexes), and legacy fail-closed tenant scoping.
+**Validation:** `pnpm db:validate` (Valid), `pnpm db:migrate:status` (6 up to date), `pnpm test` (223 passed across 21 suites), `pnpm test:integration` (91 passed across 8 suites), `pnpm typecheck` (21 baseline errors, 0 regressions), `pnpm lint` (20 baseline errors, 55 warnings, 0 regressions), targeted ESLint clean.
 
 **Task ID:** I6-S5-T02
 **Title:** INSPECT & STOP CandidateLead Usage
