@@ -669,17 +669,38 @@ graph TD
 
 **Task ID:** I6-S5-T02
 **Title:** INSPECT & STOP CandidateLead Usage
+**Status:** DONE / VERIFIED
 **Risk:** MEDIUM
 **Depends On:** I6-S5-T01
 **Blocks:** I6-S5-T03
 **Can Run In Parallel With:** None
-**Files / Areas:** Migration script, old code paths
+**Files / Areas:** `tests/integration/candidate-lead-deprecation.integration.test.ts`
 **Objective:** Evaluate if legacy leads hold valuable provenance data.
 **Acceptance Criteria:**
-- Data inspection evaluates `CandidateLead`.
-- Identify required backfills or mark for pure deletion. New callers must not use it.
-- Verify zero live references.
-**Validation:** `pnpm test:integration`
+- **PostgreSQL Direct Data Inspection:**
+  - CandidateLead row count: 0 (confirmed empty).
+  - Candidate row count: 0; Application row count: 0.
+  - Zero live or historical rows; no valuable provenance or contact data exists in `candidate_leads`.
+  - Zero incoming foreign keys from any other table to `candidate_leads`.
+  - `Candidate` table contains no scalar columns pointing to `candidate_leads` (`sourceLeadId`, `leadId`, `candidateLeadId` are absent).
+- **Repository Usage Audit & Runtime Deprecation:**
+  - Total raw references outside generated Prisma: 47 (all in `docs/`, `0001_baseline/migration.sql`, or `prisma/schema.prisma`).
+  - Active runtime reads: 0.
+  - Active runtime writes: 0.
+  - Dead/unused legacy code references in `src/`: 0.
+  - Files changed to stop usage: 0 (verified zero runtime callers exist in `src/`).
+- **Data Disposition:**
+  - Backfill required: NO.
+  - Data migration required: NO.
+  - Provenance migration required: NO.
+  - Candidate migration required: NO.
+  - Safe future drop: YES (pure schema drop scheduled for Stage 9 under task `I6-S9-T02`).
+  - `CandidateLead` model and `candidate_leads` table retained temporarily without schema mutation (`schema changed: NO`, `migration created: NO`).
+- **Architectural & Static Regression Guard:**
+  - Integration and static regression test suite created in `tests/integration/candidate-lead-deprecation.integration.test.ts`.
+  - Enforces: zero runtime files in `src/` (outside generated prisma) may reference `CandidateLead`, `candidateLead`, `candidate_lead`, `candidate_leads`, `leadId`, `candidateLeadId`, or `LeadStatus`.
+  - Enforces: `candidate_leads` row count remains 0, incoming FK count remains 0, and `Candidate` table has no lead foreign key columns.
+**Validation:** `pnpm db:validate` (Valid), `pnpm db:migrate:status` (6 up to date), `pnpm test` (228 passed across 22 suites), `pnpm test:integration` (96 passed across 9 suites), `pnpm typecheck` (21 baseline errors, 0 regressions), `pnpm lint` (20 baseline errors, 55 warnings, 0 regressions), targeted ESLint clean.
 
 **Task ID:** I6-S5-T03
 **Title:** Candidate Application & Infrastructure Capability
