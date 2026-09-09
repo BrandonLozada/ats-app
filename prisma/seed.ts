@@ -23,6 +23,7 @@ async function main() {
     "vacancy.publish",
     "candidate.create",
     "candidate.read",
+    "candidate.update",
     "tenant.manage",
     "pipeline.manage",
   ];
@@ -134,6 +135,7 @@ async function main() {
         "application.move_stage",
         "candidate.create",
         "candidate.read",
+        "candidate.update",
       ],
     },
     {

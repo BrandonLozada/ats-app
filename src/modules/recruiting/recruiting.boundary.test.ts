@@ -33,6 +33,8 @@ describe("Recruiting Module Public Boundaries", () => {
     expect(typeof recruitingServer.publishVacancy).toBe("function");
     expect(typeof recruitingServer.findPublishedVacancies).toBe("function");
     expect(typeof recruitingServer.getPublicVacancyDetails).toBe("function");
+    expect(typeof recruitingServer.createCandidate).toBe("function");
+    expect(typeof recruitingServer.updateCandidate).toBe("function");
   });
 
   it("does not export PipelineAuthContext from public or public.server", () => {
@@ -46,6 +48,8 @@ describe("Recruiting Module Public Boundaries", () => {
     expect("prismaPipelineRepository" in recruitingServer).toBe(false);
     expect("PrismaVacancyRepository" in recruitingServer).toBe(false);
     expect("prismaVacancyRepository" in recruitingServer).toBe(false);
+    expect("PrismaCandidateRepository" in recruitingServer).toBe(false);
+    expect("prismaCandidateRepository" in recruitingServer).toBe(false);
     expect("findPublishedVacanciesQuery" in recruitingServer).toBe(false);
     expect("getPublicVacancyDetailsQuery" in recruitingServer).toBe(false);
     expect("db" in recruitingServer).toBe(false);
@@ -58,6 +62,8 @@ describe("Recruiting Module Public Boundaries", () => {
     expect("publishVacancy" in recruitingClient).toBe(false);
     expect("findPublishedVacancies" in recruitingClient).toBe(false);
     expect("getPublicVacancyDetails" in recruitingClient).toBe(false);
+    expect("createCandidate" in recruitingClient).toBe(false);
+    expect("updateCandidate" in recruitingClient).toBe(false);
     expect("findPublishedVacanciesQuery" in recruitingClient).toBe(false);
     expect("getPublicVacancyDetailsQuery" in recruitingClient).toBe(false);
     expect("prisma" in recruitingClient).toBe(false);

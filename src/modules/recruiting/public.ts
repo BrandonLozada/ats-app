@@ -39,5 +39,18 @@ export type {
 
 export type { PublicVacancyReadError } from "./application/vacancy/vacancy-public.errors";
 
+export type {
+  CandidateStatus,
+  CandidateRecord,
+  CandidateSummary,
+  DataProvenanceRecord,
+  PrivacyAcknowledgmentRecord,
+  CandidateDuplicateMatch,
+  CandidateMutationResult,
+  CreateDataProvenanceInput,
+  CreatePrivacyAcknowledgmentInput,
+  CreateCandidateInput,
+  UpdateCandidateInput,
+} from "./application/candidate/candidate.types";
 
-
+export type { CandidateError } from "./application/candidate/candidate.errors";

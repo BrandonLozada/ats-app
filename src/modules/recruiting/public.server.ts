@@ -10,6 +10,8 @@ export {
   publishVacancy,
   findPublishedVacancies,
   getPublicVacancyDetails,
+  createCandidate,
+  updateCandidate,
 } from "./composition.server";
 
 export type {
@@ -39,6 +41,18 @@ export type {
   PublicVacancyDetails,
   PublicVacancyReadError,
   GetPublicVacancyDetailsInput,
+  CandidateStatus,
+  CandidateRecord,
+  CandidateSummary,
+  DataProvenanceRecord,
+  PrivacyAcknowledgmentRecord,
+  CandidateDuplicateMatch,
+  CandidateMutationResult,
+  CreateDataProvenanceInput,
+  CreatePrivacyAcknowledgmentInput,
+  CreateCandidateInput,
+  UpdateCandidateInput,
+  CandidateError,
 } from "./public";
 
 

@@ -255,7 +255,7 @@ graph TD
 **Files / Areas:** `prisma/schema.prisma`, `prisma/migrations/0002_authorization_foundation/`, `prisma/seed.ts`, `src/application/auth/authorization.service.ts`
 **Objective:** Create canonical membership and tenant-scoped RBAC persistence schema.
 **Acceptance Criteria:**
-- `Permission`: Global capabilities (`name @unique`, timestamped, no tenant leakage). Seeded 9 canonical capabilities deterministically.
+- `Permission`: Global capabilities (`name @unique`, timestamped, no tenant leakage). The canonical catalogue currently contains 10 capabilities; the original Stage 2 foundation seeded 9 and `candidate.update` was added canonically in I6-S5-T03.
 - `Role`: Tenant-scoped (`tenantId`, `name`, `systemKey?`, `isSystem`, `@@unique([tenantId, name])`, `@@unique([tenantId, systemKey])`, `@@unique([tenantId, id])`). Seeded `TenantAdmin`, `Recruiter`, `HRManager` for AMA tenant.
 - `TenantMembership`: Multi-tenant user membership (`tenantId`, `userId`, `status: TenantMembershipStatus`, `@@unique([tenantId, userId])`, `@@unique([tenantId, id])`).
 - `MembershipRole`: Explicit join model with DB-enforced compound foreign keys (`[tenantId, tenantMembershipId] -> TenantMembership [tenantId, id]` and `[tenantId, roleId] -> Role [tenantId, id]`, `@@unique([tenantMembershipId, roleId])`).
@@ -704,17 +704,56 @@ graph TD
 
 **Task ID:** I6-S5-T03
 **Title:** Candidate Application & Infrastructure Capability
+**Status:** DONE / VERIFIED
 **Risk:** HIGH
 **Depends On:** I6-S5-T02
 **Blocks:** Stage 6
 **Can Run In Parallel With:** None
-**Files / Areas:** `src/modules/recruiting/`
-**Objective:** Provide safe soft-duplicate candidate resolution.
+**Files / Areas:** `src/modules/recruiting/application/candidate/`, `src/modules/recruiting/infrastructure/prisma-candidate-repository.ts`, `src/modules/recruiting/composition.server.ts`, `src/modules/recruiting/public.ts`, `src/modules/recruiting/public.server.ts`, `tests/integration/candidate-capability.integration.test.ts`
+**Objective:** Provide tenant-safe, soft-duplicate candidate resolution, atomic provenance, and optional privacy acknowledgment.
 **Acceptance Criteria:**
-- `CandidateRepository` implemented.
-- `create/update Candidate` handles `DataProvenance` and `PrivacyAcknowledgment`.
-- Soft duplicate logic implemented.
-**Validation:** `pnpm test`
+- **Candidate Domain Contract & Tenant Authority:**
+  - `Candidate != User`. Independent recruiting identity scoped by `tenantId`.
+  - Tenant authority derived strictly from `AuthenticatedContext` (`ctx.tenant.tenantId`, `ctx.actor.userId`, `ctx.permissions`).
+  - No caller-supplied authority (`tenantId`, `permissions`, `membershipId`) trusted in mutation payload.
+  - Strict capability-based authorization: `createCandidate` strictly requires `candidate.create`; `updateCandidate` strictly requires `candidate.update`. No authorization fallback (`candidate.create` alone cannot authorize `updateCandidate`).
+- **Candidate Acquisition & Source Semantics (ADR-016):**
+  - Candidate acquisition history is modeled strictly via append-only `DataProvenance(source, channel)`.
+  - Legacy physical column `Candidate.sourceId` is completely excluded from canonical Candidate capability contracts (`CreateCandidateInput`, `UpdateCandidateInput`, `CandidateRecord`, `CreateCandidateData`, `UpdateCandidateData`, use cases, and repository interfaces).
+- **Soft Duplicate Detection (ADR-007):**
+  - Tenant-scoped soft duplicate query via `emailNormalized` and `phoneNormalized` (ignoring records in other tenants).
+  - Duplicate matches are non-blocking signals (`matchedOn: ["email", "phone"]`) returned to caller without blocking candidate creation.
+  - No hard uniqueness on email/phone; no automatic merge.
+  - Fail-closed duplicate infrastructure failures: If `findSoftDuplicates` fails (e.g. database/network error), the mutation immediately returns `REPOSITORY_ERROR` and aborts without attempting candidate create or update mutations.
+- **Pure Domain Normalization:**
+  - Deterministic lowercase and trimmed `emailNormalized` with minimal/pragmatic structural email format validation.
+  - Conservative digit extraction for `phoneNormalized` preserving raw formatting string; null when no digits exist.
+  - Deterministic name validation ensuring non-empty `firstName`, optional `lastName`, and computed full `name`.
+- **Consumer-Owned Repository Port & Infrastructure Adapter:**
+  - Pure port `CandidateRepositoryPort` defined in `application/candidate/ports/candidate-repository.ts` with zero `@prisma/*` imports.
+  - Infrastructure adapter `PrismaCandidateRepository` implements port with `import "server-only"`.
+  - Atomic local Prisma transaction (`prisma.$transaction`) guarantees `Candidate` + `DataProvenance` + optional `PrivacyAcknowledgment` succeed together without partial persistence.
+  - Final candidate update mutation in `PrismaCandidateRepository.updateCandidate` is strictly tenant-scoped using compound unique selector `where: { tenantId_id: { tenantId: data.tenantId, id: data.candidateId } }` to ensure cross-tenant mutations are physically impossible.
+  - Tightened constraint mapping: Prisma `P2002` violations are mapped to `CandidateAlreadyClaimedException` (`CANDIDATE_ALREADY_CLAIMED_BY_USER`) strictly when the violation corresponds to candidate account-claim uniqueness (`tenant_id + auth_user_id` / `candidates_tenant_id_auth_user_id_key`). Unknown `P2002` violations propagate as generic repository errors mapped to `REPOSITORY_ERROR` without leaking Prisma errors through public API.
+  - Foreign key violations (`P2003`) mapped cleanly to pure domain exceptions (`AuthUserNotFoundException`, `PrivacyPolicyVersionNotFoundException`).
+- **DataProvenance Semantics (ADR-016):**
+  - 1:N append-only relationship recording acquisition history (`source`, `channel`, `collectedAt`).
+  - Required on Candidate creation; optional on update (appends new event, never overwriting historical events).
+  - Zero usage of deprecated `CandidateLead`.
+- **PrivacyAcknowledgment Semantics (ADR-016):**
+  - Optional on creation/update. If provided, requires exact `policyVersionId`.
+  - Repository verifies policy exists and belongs to the exact same `tenantId` (cross-tenant policy fails closed with `PRIVACY_POLICY_VERSION_NOT_FOUND`).
+  - 1:N append-only store; updates append new acknowledgment without overwriting historical policy consents.
+- **Account Claiming & authUserId (ADR-005):**
+  - Optional `authUserId` link to Better Auth `users.id`.
+  - Within a Tenant: a User may claim at most one Candidate (`@@unique([tenantId, authUserId])`). Duplicate claim in same tenant returns `CANDIDATE_ALREADY_CLAIMED_BY_USER`.
+  - Cross-tenant: same User may claim a Candidate in a distinct Tenant.
+  - Non-existent user fails closed with `AUTH_USER_NOT_FOUND`.
+- **Public Module Surface:**
+  - Client-safe pure types exported via `public.ts`. Zero server secrets or Prisma leaks.
+  - Server capabilities `createCandidate` and `updateCandidate` exported via `public.server.ts` (`import "server-only"`).
+  - Boundary tests verify zero leaks and zero runtime `CandidateLead` usage.
+**Validation:** `pnpm db:validate` (Valid), `pnpm db:migrate:status` (6 up to date), `pnpm test` (280 passed across 25 suites), `pnpm test:integration` (112 passed across 10 suites), `pnpm typecheck` (21 baseline errors, 0 regressions), `pnpm lint` (20 baseline errors, 55 warnings, 0 regressions), targeted ESLint clean (0 errors, 0 warnings).
 
 **Task ID:** I6-S5-T04
 **Title:** Privacy Policy Resolution Capability

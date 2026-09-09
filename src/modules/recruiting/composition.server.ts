@@ -12,6 +12,9 @@ import {
 } from "./application/pipeline/resolve-pipeline-version";
 import { createVacancyUseCase } from "./application/vacancy/create-vacancy";
 import { publishVacancyUseCase } from "./application/vacancy/publish-vacancy";
+import { PrismaCandidateRepository } from "./infrastructure/prisma-candidate-repository";
+import { createCandidateUseCase } from "./application/candidate/create-candidate";
+import { updateCandidateUseCase } from "./application/candidate/update-candidate";
 import {
   findPublishedVacanciesQuery,
   getPublicVacancyDetailsQuery,
@@ -27,6 +30,7 @@ import { Result, ok, err } from "@/platform/shared/result";
 
 const prismaPipelineRepository = new PrismaPipelineRepository();
 const prismaVacancyRepository = new PrismaVacancyRepository();
+const prismaCandidateRepository = new PrismaCandidateRepository();
 
 export const createPipeline = createPipelineUseCase(prismaPipelineRepository);
 export const createPipelineVersion = createPipelineVersionUseCase(
@@ -46,6 +50,9 @@ export const resolveLatestPublishedPipelineVersion =
 
 export const createVacancy = createVacancyUseCase(prismaVacancyRepository);
 export const publishVacancy = publishVacancyUseCase(prismaVacancyRepository);
+
+export const createCandidate = createCandidateUseCase(prismaCandidateRepository);
+export const updateCandidate = updateCandidateUseCase(prismaCandidateRepository);
 
 export async function findPublishedVacancies(
   ctx: PublicTenantContext
