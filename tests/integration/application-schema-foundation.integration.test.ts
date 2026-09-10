@@ -721,21 +721,25 @@ describe("I6-S6-T01: Application Schema Foundation Integration Tests (Real Postg
   });
 
   describe("Static Migration and Concurrency Guards", () => {
-    it("verifies in PostgreSQL metadata that all 5 Application structural foreign keys have delete_rule = RESTRICT", async () => {
+    it("verifies in PostgreSQL metadata that all Application structural foreign keys have delete_rule = RESTRICT", async () => {
       const constraints: Array<{ constraint_name: string; delete_rule: string }> = await prisma.$queryRaw`
         SELECT constraint_name, delete_rule
         FROM information_schema.referential_constraints
         WHERE constraint_name IN (
           'applications_job_posting_id_fkey',
           'applications_stage_id_fkey',
-          'applications_vacancy_id_fkey',
           'applications_current_stage_id_fkey',
-          'applications_assigned_vacancy_location_id_fkey'
+          'applications_candidate_id_fkey',
+          'applications_tenant_id_candidate_id_fkey',
+          'applications_vacancy_id_fkey',
+          'applications_tenant_id_vacancy_id_fkey',
+          'applications_assigned_vacancy_location_id_fkey',
+          'applications_tenant_id_vacancy_id_assigned_vacancy_locatio_fkey'
         )
         ORDER BY constraint_name;
       `;
 
-      expect(constraints.length).toBe(5);
+      expect(constraints.length).toBe(9);
       for (const c of constraints) {
         expect(c.delete_rule).toBe("RESTRICT");
       }
@@ -774,7 +778,7 @@ describe("I6-S6-T01: Application Schema Foundation Integration Tests (Real Postg
       });
     });
 
-    it("confirms no active partial unique index exists yet on applications (deferred to T03)", async () => {
+    it("confirms active partial unique index exists on applications (implemented in T03)", async () => {
       const indexes: Array<{ indexname: string; indexdef: string }> = await prisma.$queryRaw`
         SELECT indexname, indexdef
         FROM pg_indexes
@@ -787,7 +791,8 @@ describe("I6-S6-T01: Application Schema Foundation Integration Tests (Real Postg
           idx.indexdef.toLowerCase().includes("outcome")
       );
 
-      expect(partialIndex).toBeUndefined();
+      expect(partialIndex).toBeDefined();
+      expect(partialIndex?.indexname).toBe("applications_active_tenant_candidate_vacancy_key");
     });
 
     it("confirms JobPosting and CandidateLead tables remain in PostgreSQL schema for deferred drops", async () => {

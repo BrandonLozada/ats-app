@@ -936,16 +936,51 @@ graph TD
 **Validation:** `pnpm db:validate` (Valid), `pnpm db:migrate:status` (8 up to date), `pnpm test` (355 passed across 30 suites), `pnpm test:integration` (179 passed across 14 suites), `pnpm typecheck` (18 baseline errors, 0 regressions), `pnpm lint` (20 baseline errors, 55 warnings, 0 regressions), targeted ESLint clean (0 errors, 0 warnings).
 
 **Task ID:** I6-S6-T03
-**Title:** ADD Partial Unique Constraint
+**Title:** Transitional Tenant-Safe Persistence Hardening & Active Partial Unique
+**Status:** DONE / VERIFIED
 **Risk:** HIGH
 **Depends On:** I6-S6-T02, I6-S0-T06
 **Blocks:** I6-S6-T04
 **Can Run In Parallel With:** None
-**Files / Areas:** `schema.prisma`
-**Objective:** DB-level concurrency safety for Applications.
+**Files / Areas:** `prisma/schema.prisma`, `prisma/migrations/0009_application_transitional_persistence_hardening/`, `prisma/migrations/0010_application_transitional_existence_fks/`, `tests/integration/application-transitional-hardening.integration.test.ts`
+**Objective:** Establish tenant-safe compound foreign keys for canonical rows, activate partial unique constraint on active Applications, retain transitional nullable compatibility for legacy writers, and maintain simple existence foreign keys to guarantee referential integrity during the nullable coexistence phase.
+**Architectural Decisions & Scope:**
+- **Transitional Nullability Retained:** `Application.tenantId`, `Application.vacancyId`, `Application.currentStageId`, and `ApplicationStageHistory.tenantId` intentionally remain nullable (`String?`) to coexist with identified active legacy Application writers without breaking runtime. Final `NOT NULL` convergence is explicitly deferred to Stage 9 task `I6-S9-T03A`.
+- **Dual-FK Transitional Integrity Strategy:**
+  - Compound foreign keys (`[tenantId, candidateId]`, `[tenantId, vacancyId]`, `[tenantId, vacancyId, assignedVacancyLocationId]`, `[tenantId, applicationId]`) are canonical tenant-isolation guards ensuring referenced records belong to the exact same tenant/vacancy context when canonical fields are populated.
+  - Simple foreign keys (`candidateId -> Candidate.id`, `vacancyId -> Vacancy.id`, `assignedVacancyLocationId -> VacancyLocation.id`, `applicationId -> Application.id`) are temporarily retained/restored as existence guards.
+  - Rationale: under PostgreSQL `MATCH SIMPLE` foreign key semantics, a compound foreign key does not validate remaining columns if any participating referencing column is `NULL`. For legacy rows where `tenantId = NULL`, compound FKs skip constraint enforcement. Therefore, simple + compound constraints are intentionally **NOT** redundant during transitional Stage 6.
+  - Corrective migration `0010_application_transitional_existence_fks` restores the four simple existence foreign keys with `ON DELETE RESTRICT ON UPDATE CASCADE` while preserving the compound tenant-safe foreign keys.
+  - Stage 9 `NOT NULL` convergence (`I6-S9-T03A`) may later make some simple existence foreign keys removable once `tenantId` and `vacancyId` are made strictly `NOT NULL` across all Application rows.
+- **Foreign Key Topology (All ON DELETE RESTRICT):**
+  - Application Candidate: `applications_candidate_id_fkey` + `applications_tenant_id_candidate_id_fkey`
+  - Application Vacancy: `applications_vacancy_id_fkey` + `applications_tenant_id_vacancy_id_fkey`
+  - Application VacancyLocation: `applications_assigned_vacancy_location_id_fkey` + `applications_tenant_id_vacancy_id_assigned_vacancy_locatio_fkey`
+  - ApplicationStageHistory Parent: `application_stage_history_application_id_fkey` + `application_stage_history_tenant_id_application_id_fkey`
+  - Application alternate key: `@@unique([tenantId, id])`
+- **Active Application Partial Unique:**
+  - `@@unique([tenantId, candidateId, vacancyId], where: { outcome: "NONE" }, map: "applications_active_tenant_candidate_vacancy_key")`
+  - Canonical `NONE + NONE` active duplicate rejected at database level.
+  - Multiple terminal applications (`REJECTED`, `WITHDRAWN`, `CANCELLED`) permitted simultaneously.
+  - Re-application permitted after terminalization (`NONE -> REJECTED -> new NONE`).
+  - Cross-tenant candidate applications remain independent.
+- **Fail-Closed Precondition:** Migration 0009 includes explicit PL/pgSQL guard checking for active duplicate canonical rows before creating constraints.
+- **Legacy Compatibility:** Legacy fields `jobPostingId`, `stageId`, and unique constraint `@@unique([candidateId, jobPostingId])` retained intact.
 **Acceptance Criteria:**
-- Prisma partial index applied safely in DB migration.
-**Validation:** `pnpm db:validate`
+- [x] Application compound FK to Candidate `[tenantId, candidateId]` with `onDelete: Restrict`.
+- [x] Application compound FK to Vacancy `[tenantId, vacancyId]` with `onDelete: Restrict`.
+- [x] Application compound FK to VacancyLocation `[tenantId, vacancyId, assignedVacancyLocationId]` with `onDelete: Restrict`.
+- [x] ApplicationStageHistory compound parent FK `[tenantId, applicationId]` with `onDelete: Restrict`.
+- [x] Application alternate key `@@unique([tenantId, id])` established.
+- [x] Dual-FK transitional integrity: simple existence FKs restored via corrective migration 0010 while compound tenant-safe FKs are preserved.
+- [x] Active Application partial unique constraint created with enum predicate `outcome = 'NONE'`.
+- [x] Fail-closed duplicate precondition guard in migration 0009.
+- [x] Zero column drops, zero table drops, zero data mutations in migration 0009 and 0010.
+- [x] Full migration chain 0001 -> 0010 verified on clean isolated schema with zero drift.
+- [x] All 29 integration tests in `tests/integration/application-transitional-hardening.integration.test.ts` pass.
+- [x] All 25 tests in `tests/integration/application-schema-foundation.integration.test.ts` pass.
+- [x] All 20 tests in `tests/integration/application-backfill.integration.test.ts` pass.
+**Validation:** `pnpm db:validate` (Valid), `pnpm db:generate` (Prisma Client 7.6.0 generated), `pnpm db:migrate:status` (10 migrations applied, schema up to date), clean replay (0001 -> 0010 with zero drift), `pnpm test` (384 passed across 31 suites), `pnpm test:integration` (208 passed across 15 suites), `pnpm typecheck` (18 baseline errors, 0 regressions), `pnpm lint` (20 baseline errors, 55 warnings, 0 regressions), targeted ESLint clean (0 errors, 0 warnings).
 
 **Task ID:** I6-S6-T04
 **Title:** Application Core Application & Infrastructure Capability
@@ -954,7 +989,14 @@ graph TD
 **Blocks:** Stage 7
 **Can Run In Parallel With:** None
 **Files / Areas:** `src/modules/recruiting/`
-**Objective:** Implement persistence and invariants.
+**Objective:** Implement persistence and invariants for canonical Applications.
+**Canonical Required-Write Contract (Prerequisite Rule):**
+- Any canonical Application repository introduced in I6-S6-T04 MUST refuse to persist an Application without:
+  - `tenantId`
+  - `vacancyId`
+  - `currentStageId`
+- It MUST validate at application/domain boundary that `currentStage` belongs to `Vacancy.pipelineVersion`.
+- The transitional nullable Prisma schema in T03 is solely for legacy coexistence and is **NOT** permission for canonical repository writes to omit these fields.
 **Acceptance Criteria:**
 - `ApplicationRepository` port/adapter.
 - Initial Application creation use case.
@@ -1156,10 +1198,29 @@ graph TD
 - `CandidateLead` table DROP migration generated.
 **Validation:** `pnpm db:validate`
 
+**Task ID:** I6-S9-T03A
+**Title:** Final Application Persistence Convergence
+**Risk:** HIGH
+**Depends On:** I6-S9-T02, all Application legacy writers switched off
+**Blocks:** I6-S9-T03 (JobPosting/Application legacy field removal)
+**Can Run In Parallel With:** None
+**Files / Areas:** `prisma/schema.prisma`, `prisma/migrations/`
+**Objective:** Remove residual legacy Application write dependencies and apply final persistence hardening.
+**Acceptance Criteria:**
+- `Application.tenantId` NOT NULL.
+- `Application.vacancyId` NOT NULL.
+- `Application.currentStageId` NOT NULL.
+- `ApplicationStageHistory.tenantId` NOT NULL.
+- Zero legacy Application rows missing canonical fields in database.
+- Legacy `jobPostingId` and `stageId` verified safe for subsequent removal.
+- All Application creation flows canonical across entire codebase.
+- Re-run active duplicate and readiness audit before applying migration.
+**Validation:** `pnpm db:validate`, `pnpm test:integration`, `pnpm validate`
+
 **Task ID:** I6-S9-T03
 **Title:** DROP Organization & JobPosting
 **Risk:** HIGH
-**Depends On:** I6-S9-T02
+**Depends On:** I6-S9-T02, I6-S9-T03A
 **Blocks:** I6-S9-T04
 **Can Run In Parallel With:** None
 **Files / Areas:** `schema.prisma`

@@ -1,6 +1,7 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -190,7 +191,8 @@ model Candidate {
 
   tenant           Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   authUser         User?                   @relation("CandidateAuthUser", fields: [authUserId], references: [id], onDelete: SetNull)
-  applications     Application[]
+  applications              Application[]           @relation("ApplicationCandidateExistence")
+  tenantScopedApplications  Application[]           @relation("ApplicationCandidateTenantScoped")
   leads            CandidateLead[]
   provenance       DataProvenance[]
   privacyAcks      PrivacyAcknowledgment[]
@@ -291,19 +293,25 @@ model Application {
   createdAt                 DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                 DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  tenant                    Tenant?                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  candidate                 Candidate                 @relation(fields: [candidateId], references: [id])
-  jobPosting                JobPosting?               @relation(fields: [jobPostingId], references: [id], onDelete: Restrict)
-  vacancy                   Vacancy?                  @relation(fields: [vacancyId], references: [id], onDelete: Restrict)
-  source                    ApplicationSource?        @relation("ApplicationSourceRelation", fields: [sourceId], references: [id])
-  stage                     PipelineStage?            @relation("LegacyApplicationStage", fields: [stageId], references: [id], onDelete: Restrict)
-  currentStage              PipelineStage?            @relation("ApplicationCurrentStage", fields: [currentStageId], references: [id], onDelete: Restrict)
-  assignedVacancyLocation   VacancyLocation?          @relation(fields: [assignedVacancyLocationId], references: [id], onDelete: Restrict)
-  createdBy                 User?                     @relation("ApplicationCreatedBy", fields: [createdById], references: [id])
-  histories                 ApplicationStageHistory[]
-  interviews                Interview[]
+  tenant                              Tenant?                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  candidate                           Candidate                 @relation("ApplicationCandidateExistence", fields: [candidateId], references: [id], onDelete: Restrict)
+  candidateTenantScoped               Candidate?                @relation("ApplicationCandidateTenantScoped", fields: [tenantId, candidateId], references: [tenantId, id], onDelete: Restrict)
+  jobPosting                          JobPosting?               @relation(fields: [jobPostingId], references: [id], onDelete: Restrict)
+  vacancy                             Vacancy?                  @relation("ApplicationVacancyExistence", fields: [vacancyId], references: [id], onDelete: Restrict)
+  vacancyTenantScoped                 Vacancy?                  @relation("ApplicationVacancyTenantScoped", fields: [tenantId, vacancyId], references: [tenantId, id], onDelete: Restrict)
+  source                              ApplicationSource?        @relation("ApplicationSourceRelation", fields: [sourceId], references: [id])
+  stage                               PipelineStage?            @relation("LegacyApplicationStage", fields: [stageId], references: [id], onDelete: Restrict)
+  currentStage                        PipelineStage?            @relation("ApplicationCurrentStage", fields: [currentStageId], references: [id], onDelete: Restrict)
+  assignedVacancyLocation             VacancyLocation?          @relation("ApplicationAssignedLocationExistence", fields: [assignedVacancyLocationId], references: [id], onDelete: Restrict)
+  assignedVacancyLocationTenantScoped VacancyLocation?          @relation("ApplicationAssignedLocationTenantScoped", fields: [tenantId, vacancyId, assignedVacancyLocationId], references: [tenantId, vacancyId, id], onDelete: Restrict)
+  createdBy                           User?                     @relation("ApplicationCreatedBy", fields: [createdById], references: [id])
+  histories                           ApplicationStageHistory[] @relation("StageHistoryApplicationExistence")
+  tenantScopedHistories               ApplicationStageHistory[] @relation("StageHistoryApplicationTenantScoped")
+  interviews                          Interview[]
 
   @@unique([candidateId, jobPostingId])
+  @@unique([tenantId, id])
+  @@unique([tenantId, candidateId, vacancyId], where: { outcome: "NONE" }, map: "applications_active_tenant_candidate_vacancy_key")
   @@index([tenantId])
   @@index([tenantId, vacancyId])
   @@index([tenantId, candidateId])
@@ -576,7 +584,8 @@ model Vacancy {
   pipelineVersion   PipelineVersion   @relation(fields: [tenantId, pipelineVersionId], references: [tenantId, id], onDelete: Restrict)
   locations         VacancyLocation[]
   hiringTeamMembers HiringTeamMember[]
-  applications      Application[]
+  applications              Application[]        @relation("ApplicationVacancyExistence")
+  tenantScopedApplications  Application[]        @relation("ApplicationVacancyTenantScoped")
 
   @@unique([tenantId, slug])
   @@unique([tenantId, id])
@@ -600,7 +609,8 @@ model VacancyLocation {
 
   vacancy       Vacancy     @relation(fields: [tenantId, vacancyId, legalEntityId], references: [tenantId, id, legalEntityId], onDelete: Cascade)
   location      Location    @relation(fields: [tenantId, legalEntityId, locationId], references: [tenantId, legalEntityId, id], onDelete: Restrict)
-  applications  Application[]
+  applications              Application[]    @relation("ApplicationAssignedLocationExistence")
+  tenantScopedApplications  Application[]    @relation("ApplicationAssignedLocationTenantScoped")
 
   @@unique([vacancyId, locationId])
   @@unique([tenantId, vacancyId, id])
@@ -640,12 +650,14 @@ model ApplicationStageHistory {
   movedById     String?        @map("moved_by_id") @db.Uuid
 
   tenant        Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  application   Application    @relation(fields: [applicationId], references: [id])
+  application               Application    @relation("StageHistoryApplicationExistence", fields: [applicationId], references: [id], onDelete: Restrict)
+  applicationTenantScoped   Application?   @relation("StageHistoryApplicationTenantScoped", fields: [tenantId, applicationId], references: [tenantId, id], onDelete: Restrict)
   fromStage     PipelineStage? @relation("FromStage", fields: [fromStageId], references: [id])
   movedBy       User?          @relation("StageMovedBy", fields: [movedById], references: [id])
   toStage       PipelineStage  @relation("ToStage", fields: [toStageId], references: [id])
 
   @@index([tenantId])
+  @@index([tenantId, applicationId])
   @@index([applicationId, movedAt])
   @@index([applicationId])
   @@index([toStageId])

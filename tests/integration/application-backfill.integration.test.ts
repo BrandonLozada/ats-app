@@ -963,15 +963,16 @@ describe("I6-S6-T02: Application Backfill Integration Tests (Real PostgreSQL)", 
 
   describe("T03 Readiness Metric & Scoped Isolation", () => {
     it("tracks assignedVacancyLocationMismatchCount and fails isT03Ready when mismatch exists", async () => {
-      // Create application with location belonging to wrong vacancy
+      // In T03, the compound FK physically prevents inserting a canonical row with mismatched vacancy location.
+      // For transitional rows with vacancyId = null, composite FK is permitted by PostgreSQL, and readiness detects the mismatch.
       await prisma.application.create({
         data: {
           id: appId1,
           tenantId: testTenantId,
           candidateId,
-          vacancyId,
+          vacancyId: null,
           currentStageId: stage1Id,
-          assignedVacancyLocationId: vacancyLocation2Id, // Mismatch with vacancyId!
+          assignedVacancyLocationId: vacancyLocation2Id, // Mismatch because vacancyId is null
           outcome: "NONE",
         },
       });
