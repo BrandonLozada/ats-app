@@ -565,7 +565,181 @@ describe("I6-S6-T01: Application Schema Foundation Integration Tests (Real Postg
     });
   });
 
+  describe("Referential ON DELETE RESTRICT Semantics (Real PostgreSQL)", () => {
+    it("rejects deletion of referenced legacy JobPosting and preserves Application data intact", async () => {
+      const app = await prisma.application.create({
+        data: {
+          id: appId1,
+          candidateId,
+          jobPostingId,
+          stageId: stage1Id,
+        },
+      });
+
+      expect(app.jobPostingId).toBe(jobPostingId);
+
+      // Attempt to delete referenced JobPosting must fail closed via FK constraint
+      await expect(
+        prisma.jobPosting.delete({
+          where: { id: jobPostingId },
+        })
+      ).rejects.toThrow();
+
+      // Application must remain completely unchanged in PostgreSQL
+      const persistedApp = await prisma.application.findUnique({
+        where: { id: appId1 },
+      });
+      expect(persistedApp).not.toBeNull();
+      expect(persistedApp?.jobPostingId).toBe(jobPostingId);
+      expect(persistedApp?.stageId).toBe(stage1Id);
+
+      await prisma.application.delete({ where: { id: appId1 } });
+    });
+
+    it("rejects deletion of referenced legacy PipelineStage and preserves Application data intact", async () => {
+      const app = await prisma.application.create({
+        data: {
+          id: appId1,
+          candidateId,
+          jobPostingId,
+          stageId: stage1Id,
+        },
+      });
+
+      expect(app.stageId).toBe(stage1Id);
+
+      // Attempt to delete referenced PipelineStage must fail closed via FK constraint
+      await expect(
+        prisma.pipelineStage.delete({
+          where: { id: stage1Id },
+        })
+      ).rejects.toThrow();
+
+      // Application must remain completely unchanged in PostgreSQL
+      const persistedApp = await prisma.application.findUnique({
+        where: { id: appId1 },
+      });
+      expect(persistedApp).not.toBeNull();
+      expect(persistedApp?.stageId).toBe(stage1Id);
+      expect(persistedApp?.jobPostingId).toBe(jobPostingId);
+
+      await prisma.application.delete({ where: { id: appId1 } });
+    });
+
+    it("rejects deletion of referenced canonical currentStage and preserves Application.currentStageId intact", async () => {
+      const app = await prisma.application.create({
+        data: {
+          id: appId1,
+          tenantId: testTenantId,
+          candidateId,
+          vacancyId,
+          currentStageId: stage1Id,
+        },
+      });
+
+      expect(app.currentStageId).toBe(stage1Id);
+
+      // Attempt to delete referenced PipelineStage must fail closed via FK constraint
+      await expect(
+        prisma.pipelineStage.delete({
+          where: { id: stage1Id },
+        })
+      ).rejects.toThrow();
+
+      // Application.currentStageId must remain completely unchanged in PostgreSQL
+      const persistedApp = await prisma.application.findUnique({
+        where: { id: appId1 },
+      });
+      expect(persistedApp).not.toBeNull();
+      expect(persistedApp?.currentStageId).toBe(stage1Id);
+      expect(persistedApp?.vacancyId).toBe(vacancyId);
+
+      await prisma.application.delete({ where: { id: appId1 } });
+    });
+
+    it("rejects deletion of referenced assigned VacancyLocation and preserves assignedVacancyLocationId intact", async () => {
+      const app = await prisma.application.create({
+        data: {
+          id: appId1,
+          tenantId: testTenantId,
+          candidateId,
+          vacancyId,
+          currentStageId: stage1Id,
+          assignedVacancyLocationId: vacancyLocationId,
+        },
+      });
+
+      expect(app.assignedVacancyLocationId).toBe(vacancyLocationId);
+
+      // Attempt to delete referenced VacancyLocation must fail closed via FK constraint
+      await expect(
+        prisma.vacancyLocation.delete({
+          where: { id: vacancyLocationId },
+        })
+      ).rejects.toThrow();
+
+      // assignedVacancyLocationId must remain completely intact in PostgreSQL (never set to NULL)
+      const persistedApp = await prisma.application.findUnique({
+        where: { id: appId1 },
+      });
+      expect(persistedApp).not.toBeNull();
+      expect(persistedApp?.assignedVacancyLocationId).toBe(vacancyLocationId);
+      expect(persistedApp?.vacancyId).toBe(vacancyId);
+
+      await prisma.application.delete({ where: { id: appId1 } });
+    });
+
+    it("rejects deletion of referenced canonical Vacancy and preserves Application.vacancyId intact", async () => {
+      const app = await prisma.application.create({
+        data: {
+          id: appId1,
+          tenantId: testTenantId,
+          candidateId,
+          vacancyId,
+          currentStageId: stage1Id,
+        },
+      });
+
+      expect(app.vacancyId).toBe(vacancyId);
+
+      // Attempt to delete referenced Vacancy must fail closed via FK constraint
+      await expect(
+        prisma.vacancy.delete({
+          where: { id: vacancyId },
+        })
+      ).rejects.toThrow();
+
+      // Application.vacancyId must remain completely unchanged in PostgreSQL
+      const persistedApp = await prisma.application.findUnique({
+        where: { id: appId1 },
+      });
+      expect(persistedApp).not.toBeNull();
+      expect(persistedApp?.vacancyId).toBe(vacancyId);
+
+      await prisma.application.delete({ where: { id: appId1 } });
+    });
+  });
+
   describe("Static Migration and Concurrency Guards", () => {
+    it("verifies in PostgreSQL metadata that all 5 Application structural foreign keys have delete_rule = RESTRICT", async () => {
+      const constraints: Array<{ constraint_name: string; delete_rule: string }> = await prisma.$queryRaw`
+        SELECT constraint_name, delete_rule
+        FROM information_schema.referential_constraints
+        WHERE constraint_name IN (
+          'applications_job_posting_id_fkey',
+          'applications_stage_id_fkey',
+          'applications_vacancy_id_fkey',
+          'applications_current_stage_id_fkey',
+          'applications_assigned_vacancy_location_id_fkey'
+        )
+        ORDER BY constraint_name;
+      `;
+
+      expect(constraints.length).toBe(5);
+      for (const c of constraints) {
+        expect(c.delete_rule).toBe("RESTRICT");
+      }
+    });
     it("confirms NO unconditional unique constraint on (candidateId, vacancyId) in T01", async () => {
       // In T01, multiple applications for the same candidate + vacancy can exist before T03 adds the partial index
       const appA = await prisma.application.create({

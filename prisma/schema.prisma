@@ -293,12 +293,12 @@ model Application {
 
   tenant                    Tenant?                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   candidate                 Candidate                 @relation(fields: [candidateId], references: [id])
-  jobPosting                JobPosting?               @relation(fields: [jobPostingId], references: [id])
+  jobPosting                JobPosting?               @relation(fields: [jobPostingId], references: [id], onDelete: Restrict)
   vacancy                   Vacancy?                  @relation(fields: [vacancyId], references: [id], onDelete: Restrict)
   source                    ApplicationSource?        @relation("ApplicationSourceRelation", fields: [sourceId], references: [id])
-  stage                     PipelineStage?            @relation("LegacyApplicationStage", fields: [stageId], references: [id])
-  currentStage              PipelineStage?            @relation("ApplicationCurrentStage", fields: [currentStageId], references: [id])
-  assignedVacancyLocation   VacancyLocation?          @relation(fields: [assignedVacancyLocationId], references: [id], onDelete: SetNull)
+  stage                     PipelineStage?            @relation("LegacyApplicationStage", fields: [stageId], references: [id], onDelete: Restrict)
+  currentStage              PipelineStage?            @relation("ApplicationCurrentStage", fields: [currentStageId], references: [id], onDelete: Restrict)
+  assignedVacancyLocation   VacancyLocation?          @relation(fields: [assignedVacancyLocationId], references: [id], onDelete: Restrict)
   createdBy                 User?                     @relation("ApplicationCreatedBy", fields: [createdById], references: [id])
   histories                 ApplicationStageHistory[]
   interviews                Interview[]

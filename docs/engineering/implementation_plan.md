@@ -817,8 +817,8 @@ graph TD
 **Depends On:** I6-S4-T03, I6-S5-T03
 **Blocks:** I6-S6-T02
 **Can Run In Parallel With:** None
-**Files / Areas:** `prisma/schema.prisma`, `prisma/migrations/0007_application_core_foundation/`
-**Objective:** Add core aggregate fields and capture location assignment semantics.
+**Files / Areas:** `prisma/schema.prisma`, `prisma/migrations/0007_application_core_foundation/`, `prisma/migrations/0008_application_fk_restrict_hardening/`, `tests/integration/application-schema-foundation.integration.test.ts`
+**Objective:** Add core aggregate fields, capture location assignment semantics, and enforce strict referential deletion actions (`RESTRICT`).
 **Acceptance Criteria:**
 - **Pre-Migration Inspection:**
   - Real DB inspection (`ats_db_dev` on `localhost:5432` PostgreSQL 17): Application rows = 0, ApplicationStageHistory rows = 0, Interview rows = 0.
@@ -834,21 +834,36 @@ graph TD
   - Strict non-null hardening and compound foreign keys deferred to T02/T03 after data backfill.
 - **Canonical Vacancy & Location Assignment Foundation (ADR-009, Frozen Decision):**
   - Added canonical `Application.vacancyId` (`String? @map("vacancy_id") @db.Uuid`) with FK to `Vacancy(id)` (`onDelete: Restrict`).
-  - Added optional `Application.assignedVacancyLocationId` (`String? @map("assigned_vacancy_location_id") @db.Uuid`) with FK to `VacancyLocation(id)` (`onDelete: SetNull`).
+  - Added optional `Application.assignedVacancyLocationId` (`String? @map("assigned_vacancy_location_id") @db.Uuid`) with FK to `VacancyLocation(id)` (`onDelete: Restrict`).
   - Location lifecycle: candidate applies to Vacancy as a whole (location null on `APPLIED`); recruiter may assign/reassign location later.
   - Added structural prerequisite alternate key `VacancyLocation.@@unique([tenantId, vacancyId, id])` in preparation for future compound FK hardening in T03.
 - **Canonical currentStage & Legacy Compatibility (Strategy B):**
-  - Added canonical `Application.currentStageId` (`String? @map("current_stage_id") @db.Uuid`) with relation `currentStage` to `PipelineStage(id)`.
-  - Retained transitional legacy `jobPostingId` (`String? @map("job_posting_id") @db.Uuid`) and `stageId` (`String? @map("stage_id") @db.Uuid`) to preserve legacy runtime compatibility without data fabrication.
+  - Added canonical `Application.currentStageId` (`String? @map("current_stage_id") @db.Uuid`) with relation `currentStage` to `PipelineStage(id)` (`onDelete: Restrict`).
+  - Retained transitional legacy `jobPostingId` (`String? @map("job_posting_id") @db.Uuid`) and `stageId` (`String? @map("stage_id") @db.Uuid`) with `onDelete: Restrict` to preserve legacy runtime compatibility without weakening referential integrity.
   - Retained legacy `@@unique([candidateId, jobPostingId])`.
   - Zero unconditional canonical unique `(candidateId, vacancyId)`; zero active partial unique index (deferred exclusively to T03).
   - Zero drops of `JobPosting` or `CandidateLead` (deferred to Stage 9).
+- **Referential Integrity Hardening (Corrective Migration 0008):**
+  - Nullable transitional FKs do NOT imply weak delete semantics (`nullable FK != SET NULL referential action`). Nullable allows the relationship to be legitimately absent, while `RESTRICT` prevents destructive deletion of referenced structural records.
+  - Legacy JobPosting (`applications_job_posting_id_fkey`) and legacy PipelineStage (`applications_stage_id_fkey`) explicitly hardened to `ON DELETE RESTRICT`.
+  - Canonical `currentStage` (`applications_current_stage_id_fkey`) explicitly hardened to `ON DELETE RESTRICT` so process state cannot be silently orphaned.
+  - Assigned `VacancyLocation` (`applications_assigned_vacancy_location_id_fkey`) explicitly hardened to `ON DELETE RESTRICT` to preserve future hiring and headcount traceability (`HIRED` applications contribute to derived location headcount and must not be silently set to NULL).
+  - Preserved `applications_vacancy_id_fkey` as `ON DELETE RESTRICT`.
+  - Migration `0007_application_core_foundation` preserved intact; corrective migration `0008_application_fk_restrict_hardening` alters constraints with zero table/column recreation and zero data rewrite.
 - **Migration & Replay Verification:**
-  - Migration `0007_application_core_foundation` created, audited, and applied to `ats_db_dev`.
-  - Verified 100% clean replay of full migration chain `0001 -> 0007` with zero schema drift on isolated test schema `ats_test_clean_0007`.
+  - Migrations `0007_application_core_foundation` and `0008_application_fk_restrict_hardening` audited and applied to `ats_db_dev` (total 8 migrations).
+  - Verified 100% clean replay of full migration chain `0001 -> 0008` with zero schema drift on isolated test schema `ats_test_clean_0008`.
 - **Tests & Verification:**
-  - 19 real PostgreSQL integration tests in `tests/integration/application-schema-foundation.integration.test.ts` (namespace `98000000-...`) verifying outcome enum values, default NONE, raw SQL invalid rejection, nullable location assignment, canonical vacancy relation, tenant FK, currentStage FK, sourcing, history tenant ownership, legacy compatibility, and static migration guards.
-**Validation:** `pnpm db:validate` (Valid), `pnpm db:generate` (Success), `pnpm db:migrate:status` (7 up to date), `pnpm test` (329 passed across 29 suites), `pnpm test:integration` (153 passed across 13 suites), `pnpm typecheck` (18 baseline errors, 0 regressions), `pnpm lint` (20 baseline errors, 55 warnings, 0 regressions), targeted ESLint clean (0 errors, 0 warnings).
+  - 25 real PostgreSQL integration tests in `tests/integration/application-schema-foundation.integration.test.ts` (namespace `98000000-...`):
+    1. ApplicationOutcome enum values, default NONE, raw SQL invalid rejection.
+    2. Nullable location assignment and assigned VacancyLocation persistence.
+    3. Canonical vacancy relation and fail-closed foreign key checks.
+    4. Canonical currentStage and sourcing relations.
+    5. ApplicationStageHistory optional tenant ownership and queryability.
+    6. Legacy compatibility: null legacy fields for canonical apps, legacy app creation, legacy @@unique([candidateId, jobPostingId]).
+    7. Referential ON DELETE RESTRICT semantics (real PostgreSQL rejection on attempted deletion of referenced JobPosting, legacy stage, canonical currentStage, assigned VacancyLocation, and Vacancy, asserting Application rows remain unchanged).
+    8. Static migration guards: zero unconditional unique index, zero partial unique index, JobPosting & CandidateLead preserved, VacancyLocation alternate key uniqueness, and information_schema verification that all 5 structural foreign keys have `delete_rule = 'RESTRICT'`.
+**Validation:** `pnpm db:validate` (Valid), `pnpm db:generate` (Success), `pnpm db:migrate:status` (8 up to date), `pnpm test` (335 passed across 29 suites), `pnpm test:integration` (159 passed across 13 suites), `pnpm typecheck` (18 baseline errors, 0 regressions), `pnpm lint` (20 baseline errors, 55 warnings, 0 regressions), targeted ESLint clean (0 errors, 0 warnings).
 
 **Task ID:** I6-S6-T02
 **Title:** BACKFILL & Inspect Application Data
