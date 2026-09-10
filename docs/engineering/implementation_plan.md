@@ -867,16 +867,73 @@ graph TD
 
 **Task ID:** I6-S6-T02
 **Title:** BACKFILL & Inspect Application Data
+**Status:** DONE / VERIFIED
 **Risk:** HIGH
 **Depends On:** I6-S6-T01
 **Blocks:** I6-S6-T03
 **Can Run In Parallel With:** None
-**Files / Areas:** Migration script
-**Objective:** Prevent unique constraint violation crashes.
+**Files / Areas:** `scripts/backfill-applications.ts`, `tests/integration/application-backfill.integration.test.ts`
+**Objective:** Controlled inspection and deterministic backfill phase for Application and ApplicationStageHistory data to prove zero unresolved conflicts before T03 partial unique constraint and final persistence hardening.
 **Acceptance Criteria:**
-- Find existing active duplicates (tenant + candidate + vacancy + outcome=NONE).
-- Resolve/Migrate them. Prove zero conflicts exist.
-**Validation:** `pnpm test:integration`
+- **Database Identity & Pre-Inspection:**
+  - Verified target database: DBngin PostgreSQL 17 on `localhost:5432`, database `ats_db_dev`, schema `public`. Docker confirmed inactive.
+  - Direct live database inspection confirmed: Applications = 0, ApplicationStageHistory = 0, Interviews = 0.
+  - Zero pre-existing rows in dev DB; valid formal NO-OP backfill migration.
+- **Deterministic Classification & Backfill Engine (`scripts/backfill-applications.ts`):**
+  - Controlled lifecycle: inspect → validate all rows → classify into strict categories (A: already canonical, B: deterministic mapping, C: ambiguous, D: invalid) → abort before mutation if ANY ambiguity or conflict exists → transactional execution → re-read and verify.
+  - Category C (ambiguous) or Category D (invalid) immediately halts execution (`BLOCKED`) with zero mutations.
+  - If canonical non-null values conflict with computed legacy mapping (e.g. `stage_id != current_stage_id`), execution fails closed (`BLOCKED`) without overwriting.
+- **Canonical Backfill Mapping & Invariant Rules:**
+  - **Tenant Resolution:** Canonical tenant derived from target `Vacancy.tenantId`. Strictly cross-checked against `Candidate.tenantId`. If `Candidate.tenantId != Vacancy.tenantId`, fails closed (`BLOCKED`).
+  - **Vacancy Mapping Authority:** Legacy JobPosting → exact authorized mapping keyed exclusively by `JobPosting.id` → canonical Vacancy (`config.jobPostingToVacancyMap?.[jobPosting.id]` / `AUTHORIZED_APPLICATION_MAPPINGS.jobPostingToVacancyMap?.[jobPosting.id]`). JobPosting slug is NOT migration authority. Title is NOT migration authority. Department similarity is NOT migration authority. Any missing authorized exact JobPosting ID mapping fails closed with `BLOCKED`.
+  - **currentStage Resolution:** Legacy `stageId` copied to `currentStageId` ONLY if referenced stage exists AND belongs to the exact `Vacancy.pipelineVersionId`. No stage fabrication, order inference, or version guessing.
+  - **Canonical vs Legacy Consistency:** Already-canonical Applications validate non-null legacy fields. If legacy `stageId` is present, requires `stageId === currentStageId`; if legacy `jobPostingId` is present, requires authoritative mapping (keyed exclusively by exact `JobPosting.id`) to match canonical `vacancyId`. Missing ID mapping or conflicting mapped Vacancy fails closed (`BLOCKED`) with zero overwrite.
+  - **Assigned VacancyLocation Validation:** Whenever `assignedVacancyLocationId` is non-null (for both canonical and backfilled applications), validates that `VacancyLocation` exists, belongs to resolved `tenantId`, and belongs to resolved `vacancyId`. Mismatches fail closed (`BLOCKED`) with zero mutation. Null remains valid.
+  - **Location Non-Fabrication:** Assigned location remains `null` (`assignedVacancyLocationId = null`) unless authoritative historical evidence exists. No arbitrary assignment to default or first location.
+  - **Outcome Semantics:** Outcome preserved as `NONE` (default) for active applications. No inference of outcome from stage name, stage order, or `isFinal` flags (Stage != Outcome).
+  - **ApplicationStageHistory Tenant Backfill:** Backfills `ApplicationStageHistory.tenantId` strictly from parent Application's canonical tenant. Preserves all semantic history fields (`fromStageId`, `toStageId`, `movedById`, `movedAt`, `notes`).
+- **Duplicate Audit & Concurrency Safety:**
+  - Active duplicate query: `GROUP BY tenant_id, candidate_id, vacancy_id HAVING COUNT(*) > 1` where `outcome = 'NONE'`.
+  - Zero active duplicate groups found on live DB. If active duplicates exist, engine fails closed (`BLOCKED`) without arbitrary deletion, merging, or terminalization.
+  - Terminal historical duplicates (`HIRED`, `REJECTED`, `WITHDRAWN`, `CANCELLED`) audited separately and correctly permitted without false blocking.
+- **Live Execution & Idempotency Verification:**
+  - First run on live `ats_db_dev`: SUCCESS (0 inspected, 0 migrated, 0 skipped, 0 blocked).
+  - Second run on live `ats_db_dev`: SUCCESS (0 inspected, 0 migrated, 0 skipped, 0 blocked, 100% idempotent).
+- **T03 Readiness Audit (Final Counts):**
+  - Total Applications: 0
+  - Applications with `tenantId` NULL: 0
+  - Applications with `vacancyId` NULL: 0
+  - Applications with `currentStageId` NULL: 0
+  - Candidate/Tenant mismatches: 0
+  - Vacancy/Tenant mismatches: 0
+  - Stage/pipeline mismatches: 0
+  - Assigned VacancyLocation mismatches: 0 (`assignedVacancyLocationMismatchCount = 0`)
+  - StageHistory `tenantId` gaps: 0
+  - Active duplicate groups: 0
+  - `isT03Ready`: true. Database is fully verified and prepared for T03 partial unique constraint and final persistence hardening.
+- **Tests & Verification:**
+  - 20 real PostgreSQL integration tests in `tests/integration/application-backfill.integration.test.ts` (namespace `98100000-...`):
+    1. Empty DB slice: zero applications handled cleanly with zero writes.
+    2. Deterministic legacy application mapping: Candidate, JobPosting, Vacancy, PipelineVersion, Stage correctly populated into canonical fields.
+    3. Idempotent second run: zero additional mutations, canonical values preserved.
+    4. Candidate/Vacancy tenant mismatch: rejected safely, zero mutation.
+    5. Wrong stage / wrong PipelineVersion: rejected safely, zero mutation.
+    6. Conflicting canonical vacancyId: legacy evidence mismatching non-null canonical field fails closed.
+    7. Conflicting canonical currentStageId: legacy evidence mismatching non-null canonical field fails closed.
+    8. Canonical Application + legacy stage conflict: rejected safely with zero mutation.
+    9. Canonical Application + legacy JobPosting conflict: rejected safely with zero mutation.
+    10. Canonical Application + unmapped legacy JobPosting: rejected safely with zero mutation.
+    11. Missing authoritative JobPosting mapping: genuinely unmapped JobPosting with identical title/department fails closed without heuristic fallback.
+    12. Anti-slug regression: slug-only config mapping without exact JobPosting ID entry rejected safely (`BLOCKED`).
+    13. Valid assigned VacancyLocation: successfully preserved and backfilled.
+    14. Assigned VacancyLocation from another Vacancy: rejected safely with zero mutation.
+    15. Assigned VacancyLocation from another Tenant: rejected safely with zero mutation.
+    16. T03 readiness metric: tracks assigned location mismatch and fails `isT03Ready`.
+    17. Scoped readiness isolation: parameterized query ensures unrelated rows outside scope do not contaminate report.
+    18. Active duplicate failure: same tenant + candidate + vacancy with outcome NONE fails closed without arbitrary resolution.
+    19. Terminal duplicates: permitted alongside active applications without collision.
+    20. Transaction rollback safety: simulated post-validation failure cleanly rolls back all modifications and leaves connection healthy.
+**Validation:** `pnpm db:validate` (Valid), `pnpm db:migrate:status` (8 up to date), `pnpm test` (355 passed across 30 suites), `pnpm test:integration` (179 passed across 14 suites), `pnpm typecheck` (18 baseline errors, 0 regressions), `pnpm lint` (20 baseline errors, 55 warnings, 0 regressions), targeted ESLint clean (0 errors, 0 warnings).
 
 **Task ID:** I6-S6-T03
 **Title:** ADD Partial Unique Constraint
