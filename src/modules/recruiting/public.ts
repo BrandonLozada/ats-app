@@ -54,3 +54,5 @@ export type {
 } from "./application/candidate/candidate.types";
 
 export type { CandidateError } from "./application/candidate/candidate.errors";
+export type { PublicPrivacyPolicy } from "./application/privacy-policy/privacy-policy-public.types";
+export type { PrivacyPolicyResolutionError } from "./application/privacy-policy/privacy-policy-public.errors";

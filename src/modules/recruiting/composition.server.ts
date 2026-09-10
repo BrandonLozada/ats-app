@@ -19,6 +19,7 @@ import {
   findPublishedVacanciesQuery,
   getPublicVacancyDetailsQuery,
 } from "./infrastructure/queries/prisma-vacancy-public-read";
+import { resolveCurrentPrivacyPolicyQuery } from "./infrastructure/queries/prisma-privacy-policy-read";
 import type { PublicTenantContext } from "@/modules/organization/public";
 import type {
   GetPublicVacancyDetailsInput,
@@ -26,6 +27,8 @@ import type {
   PublicVacancySummary,
 } from "./application/vacancy/vacancy-public.types";
 import type { PublicVacancyReadError } from "./application/vacancy/vacancy-public.errors";
+import type { PublicPrivacyPolicy } from "./application/privacy-policy/privacy-policy-public.types";
+import type { PrivacyPolicyResolutionError } from "./application/privacy-policy/privacy-policy-public.errors";
 import { Result, ok, err } from "@/platform/shared/result";
 
 const prismaPipelineRepository = new PrismaPipelineRepository();
@@ -91,5 +94,15 @@ export async function getPublicVacancyDetails(
   return ok(vacancy);
 }
 
+export async function resolveCurrentPrivacyPolicy(
+  ctx: PublicTenantContext
+): Promise<Result<PublicPrivacyPolicy, PrivacyPolicyResolutionError>> {
+  if (!ctx || typeof ctx.tenantId !== "string" || ctx.tenantId.trim().length === 0) {
+    return err({
+      code: "PRIVACY_POLICY_NOT_FOUND",
+      message: "Active privacy policy not found.",
+    });
+  }
 
-
+  return resolveCurrentPrivacyPolicyQuery(ctx.tenantId.trim());
+}

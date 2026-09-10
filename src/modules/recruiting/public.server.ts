@@ -12,6 +12,7 @@ export {
   getPublicVacancyDetails,
   createCandidate,
   updateCandidate,
+  resolveCurrentPrivacyPolicy,
 } from "./composition.server";
 
 export type {
@@ -53,6 +54,8 @@ export type {
   CreateCandidateInput,
   UpdateCandidateInput,
   CandidateError,
+  PublicPrivacyPolicy,
+  PrivacyPolicyResolutionError,
 } from "./public";
 
 

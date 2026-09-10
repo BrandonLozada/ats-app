@@ -4,6 +4,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 import { COMPANY_DOMAIN, COMPANY_NAME } from "@/config/app";
+import { seedAmaPrivacyPolicy } from "./privacy-policy-seed";
 
 // const connectionString = `${process.env.DATABASE_URL}`;
 // const pool = new Pool({ connectionString });
@@ -64,6 +65,10 @@ async function main() {
     },
   });
   console.log("✅ Tenant creado/upserted:", tenant);
+
+  // Canonical Privacy Policy (MVP Development Placeholder - Non-destructive Bootstrap)
+  const privacyPolicy = await seedAmaPrivacyPolicy(prisma, tenant.id);
+  console.log(`✅ Privacy Policy Seed: [${privacyPolicy.status}] ${privacyPolicy.message}`);
 
   // Pipeline con stages (Tenant-scoped con PipelineVersion canonical PUBLISHED)
   let pipeline = await prisma.hiringPipeline.findFirst({

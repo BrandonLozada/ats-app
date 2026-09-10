@@ -757,17 +757,52 @@ graph TD
 
 **Task ID:** I6-S5-T04
 **Title:** Privacy Policy Resolution Capability
+**Status:** DONE / VERIFIED
 **Risk:** LOW
 **Depends On:** I6-S5-T01
 **Blocks:** Stage 7
 **Can Run In Parallel With:** I6-S5-T03
-**Files / Areas:** `src/modules/recruiting/`
+**Files / Areas:** `src/modules/recruiting/application/privacy-policy/`, `src/modules/recruiting/infrastructure/queries/prisma-privacy-policy-read.ts`, `src/modules/recruiting/composition.server.ts`, `src/modules/recruiting/public.ts`, `src/modules/recruiting/public.server.ts`, `prisma/seed.ts`, `tests/integration/privacy-policy-resolution.integration.test.ts`
 **Objective:** Allow guest apply to determine the active legal policy.
 **Acceptance Criteria:**
-- Retrieve current `PrivacyPolicyVersion`. (Seed/static is sufficient for MVP).
-**Validation:** `pnpm test`
+- **PublicTenantContext Authority & Security Boundary:**
+  - Public read capability governed strictly by `PublicTenantContext` (`ctx.tenantId`); does NOT require `AuthenticatedContext`, User session, TenantMembership, or internal permissions.
+  - Zero acceptance of caller-supplied trusted `tenantId` parameter separate from `PublicTenantContext`.
+- **Active & Published Policy Semantics:**
+  - Active policy resolution strictly requires `tenantId = ctx.tenantId`, `isActive = true`, and `publishedAt != null`.
+  - An unpublished policy (`publishedAt = null`) is fail-closed and never served as legally active even if `isActive = true`.
+- **Exactly-One Active Policy & Fail-Closed Resolution:**
+  - 0 active published policies → `PRIVACY_POLICY_NOT_FOUND`.
+  - Exactly 1 active published policy → Success (`ok(PublicPrivacyPolicy)`).
+  - >1 active policies or >1 active published policies → `PRIVACY_POLICY_CONFIGURATION_ERROR`.
+  - No silent picking of first, latest, or auto-healing.
+- **Client-Safe Public DTO (`PublicPrivacyPolicy`):**
+  - Minimal projection: `id`, `version`, `content`, `publishedAt: Date`.
+  - Strictly excludes internal and security-sensitive fields: `tenantId`, `isActive`, `createdAt`, acknowledgments, and Candidate relations.
+- **Error Model & Sanitization:**
+  - Pure client-safe error union: `PRIVACY_POLICY_NOT_FOUND`, `PRIVACY_POLICY_CONFIGURATION_ERROR`, `PRIVACY_POLICY_READ_ERROR`.
+  - Infrastructure failures are caught and sanitized without exposing Prisma/PostgreSQL connection strings, table names, or error messages.
+- **Read Architecture (ADR-020):**
+  - Lightweight CQRS read query adapter `prisma-privacy-policy-read.ts` with `import "server-only"`.
+  - Zero repository ports, QueryBus, or generic read abstractions created.
+- **Multi-Tenant Isolation:**
+  - Cross-tenant queries are strictly prevented by tenant scoping. A tenant context never resolves another tenant's privacy policy.
+- **Deterministic & Non-Destructive Bootstrap Seed Lifecycle:**
+  - Seed owns initial bootstrap ONLY; it does not act as policy lifecycle manager.
+  - Deterministic on fresh DB: creates initial canonical active published policy version `1.0.0` for AMA tenant (`id: e6759b00-0000-4000-a000-000000000001`, `publishedAt: 2026-09-01T00:00:00.000Z`, `isActive: true`, development placeholder text).
+  - Non-destructive on historical policy lifecycle: repeated execution preserves existing policy version states without blind `upsert` updates, overwriting content, or reactivating obsolete versions (e.g. if v1 is inactive and v2 is active, rerun preserves both without reactivation).
+  - Fails closed loudly with clear configuration error on conflicting active configuration (>1 active policies) or unexpected IDs for version 1.0.0 without auto-healing or silent adoption.
+- **Tests & Verification:**
+  - 7 unit tests in `src/modules/recruiting/infrastructure/queries/prisma-privacy-policy-read.test.ts` verifying single-active, zero-active, draft-unpublished, multiple-active configuration errors, infrastructure error sanitization, and context validation.
+  - 12 boundary tests in `src/modules/recruiting/recruiting.boundary.test.ts` verifying exports, server-only enforcement, zero leaks, and zero repository read ports in application layer.
+  - 10 real PostgreSQL integration tests in `tests/integration/privacy-policy-resolution.integration.test.ts` (namespace `97000000-...`) verifying tenant resolution, cross-tenant isolation, inactive exclusion, draft exclusion, multiple-active configuration errors, projection cleanliness, and 0 residual rows after cleanup.
+  - 12 seed lifecycle tests in `tests/integration/privacy-policy-seed-lifecycle.test.ts` verifying pure decision matrix and real PostgreSQL lifecycle safety (fresh create, rerun preserve, inactive v1 + active v2 preservation, multi-active failure, unexpected ID failure, clean fixture teardown).
+**Validation:** `pnpm db:validate` (Valid), `pnpm db:migrate:status` (6 up to date), `pnpm test` (310 passed across 28 suites), `pnpm test:integration` (134 passed across 12 suites), `pnpm typecheck` (21 baseline errors, 0 regressions), `pnpm lint` (20 baseline errors, 55 warnings, 0 regressions), targeted ESLint clean (0 errors, 0 warnings).
+
+**Stage 5 — Candidate & Privacy Core Complete**: All exit criteria achieved (T01-T04 DONE / VERIFIED). Candidate identity, DataProvenance, and Privacy resolution/lifecycle frameworks are fully formed, tenant-safe, verified against PostgreSQL, and ready for Stage 6 Application Core. Next task: I6-S6-T01.
 
 ---
+
 
 ### Stage 6: Application Core
 **Objective:** Foundational Application persistence and stage history.

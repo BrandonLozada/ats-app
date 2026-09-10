@@ -35,6 +35,7 @@ describe("Recruiting Module Public Boundaries", () => {
     expect(typeof recruitingServer.getPublicVacancyDetails).toBe("function");
     expect(typeof recruitingServer.createCandidate).toBe("function");
     expect(typeof recruitingServer.updateCandidate).toBe("function");
+    expect(typeof recruitingServer.resolveCurrentPrivacyPolicy).toBe("function");
   });
 
   it("does not export PipelineAuthContext from public or public.server", () => {
@@ -52,6 +53,7 @@ describe("Recruiting Module Public Boundaries", () => {
     expect("prismaCandidateRepository" in recruitingServer).toBe(false);
     expect("findPublishedVacanciesQuery" in recruitingServer).toBe(false);
     expect("getPublicVacancyDetailsQuery" in recruitingServer).toBe(false);
+    expect("resolveCurrentPrivacyPolicyQuery" in recruitingServer).toBe(false);
     expect("db" in recruitingServer).toBe(false);
     expect("PrismaClient" in recruitingServer).toBe(false);
   });
@@ -64,19 +66,28 @@ describe("Recruiting Module Public Boundaries", () => {
     expect("getPublicVacancyDetails" in recruitingClient).toBe(false);
     expect("createCandidate" in recruitingClient).toBe(false);
     expect("updateCandidate" in recruitingClient).toBe(false);
+    expect("resolveCurrentPrivacyPolicy" in recruitingClient).toBe(false);
     expect("findPublishedVacanciesQuery" in recruitingClient).toBe(false);
     expect("getPublicVacancyDetailsQuery" in recruitingClient).toBe(false);
+    expect("resolveCurrentPrivacyPolicyQuery" in recruitingClient).toBe(false);
     expect("prisma" in recruitingClient).toBe(false);
     expect("DATABASE_URL" in recruitingClient).toBe(false);
   });
 
-  it("infrastructure query adapter enforces server-only", () => {
-    const queryFile = path.resolve(
+  it("infrastructure query adapters enforce server-only", () => {
+    const vacancyQueryFile = path.resolve(
       __dirname,
       "infrastructure/queries/prisma-vacancy-public-read.ts"
     );
-    const content = fs.readFileSync(queryFile, "utf-8");
-    expect(content).toMatch(/^import\s+["']server-only["'];/);
+    const vacancyContent = fs.readFileSync(vacancyQueryFile, "utf-8");
+    expect(vacancyContent).toMatch(/^import\s+["']server-only["'];/);
+
+    const privacyQueryFile = path.resolve(
+      __dirname,
+      "infrastructure/queries/prisma-privacy-policy-read.ts"
+    );
+    const privacyContent = fs.readFileSync(privacyQueryFile, "utf-8");
+    expect(privacyContent).toMatch(/^import\s+["']server-only["'];/);
   });
 });
 
@@ -138,6 +149,17 @@ describe("Recruiting Module Architectural Boundaries", () => {
     for (const file of appFiles) {
       const content = fs.readFileSync(file, "utf-8");
       expect(content).not.toContain("VacancyPublicReadRepositoryPort");
+    }
+  });
+
+  it("ensures no PrivacyPolicyRepositoryPort or read repository port exists in application layer (ADR-020)", () => {
+    const appDir = path.join(recruitingDir, "application");
+    const appFiles = getAllSourceTsFiles(appDir);
+    for (const file of appFiles) {
+      const content = fs.readFileSync(file, "utf-8");
+      expect(content).not.toContain("PrivacyPolicyRepositoryPort");
+      expect(content).not.toContain("PrivacyPolicyReadRepositoryPort");
+      expect(content).not.toContain("PrivacyPolicyQueryBus");
     }
   });
 });
