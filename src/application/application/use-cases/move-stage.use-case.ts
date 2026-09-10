@@ -55,6 +55,9 @@ export async function moveStageUseCase(input: unknown) {
     }
 
     const currentStage = application.stage;
+    if (!application.jobPosting) {
+      throw new Error("Application has no job posting");
+    }
     const pipeline = application.jobPosting.pipeline;
 
     if (!currentStage) {

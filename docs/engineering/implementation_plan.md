@@ -812,24 +812,43 @@ graph TD
 
 **Task ID:** I6-S6-T01
 **Title:** MODIFY Application Schema
+**Status:** DONE / VERIFIED
 **Risk:** HIGH
 **Depends On:** I6-S4-T03, I6-S5-T03
 **Blocks:** I6-S6-T02
 **Can Run In Parallel With:** None
-**Files / Areas:** `schema.prisma`
+**Files / Areas:** `prisma/schema.prisma`, `prisma/migrations/0007_application_core_foundation/`
 **Objective:** Add core aggregate fields and capture location assignment semantics.
 **Acceptance Criteria:**
-- ADD `ApplicationOutcome`, `currentStage` fields.
-- Canonical Application Location Assignment Semantics (Frozen Decision):
-  - Candidate applies to `Vacancy` as a whole, NOT mandatory `VacancyLocation` at application submission time (`Candidate` → `Application` → `Vacancy`).
-  - Location assignment lifecycle:
-    - `APPLIED` → Vacancy only.
-    - `SCREENING` / `INTERVIEW` → `VacancyLocation` may still be unassigned.
-    - Later recruiting process → Recruiter / Hiring Manager may assign or reassign a `VacancyLocation`.
-    - `HIRED` → final `VacancyLocation` must be known when Vacancy uses location allocation.
-  - Traceability: location assignment/reassignment must be auditable (history or domain events/AuditLog).
-  - Optional assignment field (e.g. `Application.assignedVacancyLocationId?`) deferred to Stage 6 schema work.
-**Validation:** `pnpm db:validate`
+- **Pre-Migration Inspection:**
+  - Real DB inspection (`ats_db_dev` on `localhost:5432` PostgreSQL 17): Application rows = 0, ApplicationStageHistory rows = 0, Interview rows = 0.
+  - Active duplicate groups observed: 0; ambiguous mappings observed: 0.
+- **ApplicationOutcome Enum & Terminal Semantics (ADR-011):**
+  - Canonical Prisma enum `ApplicationOutcome`: `NONE`, `HIRED`, `REJECTED`, `WITHDRAWN`, `CANCELLED` (`@@map("application_outcomes")`).
+  - Added `Application.outcome` with default `NONE`.
+  - Terminal truth separated from process state (pipeline stages do not define outcome).
+- **Tenant Ownership Foundation (ADR-002, ADR-003):**
+  - Added transition-safe `Application.tenantId` (`String? @map("tenant_id") @db.Uuid`) with FK to `Tenant(id)` (`onDelete: Cascade`).
+  - Added tenant-leading indexes: `[tenantId]`, `[tenantId, vacancyId]`, `[tenantId, candidateId]`, `[tenantId, currentStageId]`, `[tenantId, outcome]`.
+  - Added transition-safe `ApplicationStageHistory.tenantId` (`String? @map("tenant_id") @db.Uuid`) with FK to `Tenant(id)` (`onDelete: Cascade`) and index `[tenantId]`.
+  - Strict non-null hardening and compound foreign keys deferred to T02/T03 after data backfill.
+- **Canonical Vacancy & Location Assignment Foundation (ADR-009, Frozen Decision):**
+  - Added canonical `Application.vacancyId` (`String? @map("vacancy_id") @db.Uuid`) with FK to `Vacancy(id)` (`onDelete: Restrict`).
+  - Added optional `Application.assignedVacancyLocationId` (`String? @map("assigned_vacancy_location_id") @db.Uuid`) with FK to `VacancyLocation(id)` (`onDelete: SetNull`).
+  - Location lifecycle: candidate applies to Vacancy as a whole (location null on `APPLIED`); recruiter may assign/reassign location later.
+  - Added structural prerequisite alternate key `VacancyLocation.@@unique([tenantId, vacancyId, id])` in preparation for future compound FK hardening in T03.
+- **Canonical currentStage & Legacy Compatibility (Strategy B):**
+  - Added canonical `Application.currentStageId` (`String? @map("current_stage_id") @db.Uuid`) with relation `currentStage` to `PipelineStage(id)`.
+  - Retained transitional legacy `jobPostingId` (`String? @map("job_posting_id") @db.Uuid`) and `stageId` (`String? @map("stage_id") @db.Uuid`) to preserve legacy runtime compatibility without data fabrication.
+  - Retained legacy `@@unique([candidateId, jobPostingId])`.
+  - Zero unconditional canonical unique `(candidateId, vacancyId)`; zero active partial unique index (deferred exclusively to T03).
+  - Zero drops of `JobPosting` or `CandidateLead` (deferred to Stage 9).
+- **Migration & Replay Verification:**
+  - Migration `0007_application_core_foundation` created, audited, and applied to `ats_db_dev`.
+  - Verified 100% clean replay of full migration chain `0001 -> 0007` with zero schema drift on isolated test schema `ats_test_clean_0007`.
+- **Tests & Verification:**
+  - 19 real PostgreSQL integration tests in `tests/integration/application-schema-foundation.integration.test.ts` (namespace `98000000-...`) verifying outcome enum values, default NONE, raw SQL invalid rejection, nullable location assignment, canonical vacancy relation, tenant FK, currentStage FK, sourcing, history tenant ownership, legacy compatibility, and static migration guards.
+**Validation:** `pnpm db:validate` (Valid), `pnpm db:generate` (Success), `pnpm db:migrate:status` (7 up to date), `pnpm test` (329 passed across 29 suites), `pnpm test:integration` (153 passed across 13 suites), `pnpm typecheck` (18 baseline errors, 0 regressions), `pnpm lint` (20 baseline errors, 55 warnings, 0 regressions), targeted ESLint clean (0 errors, 0 warnings).
 
 **Task ID:** I6-S6-T02
 **Title:** BACKFILL & Inspect Application Data

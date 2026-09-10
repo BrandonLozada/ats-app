@@ -275,25 +275,43 @@ model CandidateLead {
 }
 
 model Application {
-  id           String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  candidateId  String                    @map("candidate_id") @db.Uuid
-  jobPostingId String                    @map("job_posting_id") @db.Uuid
-  sourceId     String?                   @map("source_id") @db.Uuid
-  stageId      String                    @map("stage_id") @db.Uuid
-  appliedAt    DateTime                  @default(now()) @map("applied_at") @db.Timestamptz(6)
-  notes        String?
-  createdById  String?                   @map("created_by_id") @db.Uuid
-  createdAt    DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  histories    ApplicationStageHistory[]
-  candidate    Candidate                 @relation(fields: [candidateId], references: [id])
-  createdBy    User?                     @relation("ApplicationCreatedBy", fields: [createdById], references: [id])
-  jobPosting   JobPosting                @relation(fields: [jobPostingId], references: [id])
-  source       ApplicationSource?        @relation("ApplicationSourceRelation", fields: [sourceId], references: [id])
-  stage        PipelineStage?            @relation(fields: [stageId], references: [id])
-  interviews   Interview[]
+  id                        String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId                  String?                   @map("tenant_id") @db.Uuid
+  candidateId               String                    @map("candidate_id") @db.Uuid
+  jobPostingId              String?                   @map("job_posting_id") @db.Uuid
+  vacancyId                 String?                   @map("vacancy_id") @db.Uuid
+  sourceId                  String?                   @map("source_id") @db.Uuid
+  stageId                   String?                   @map("stage_id") @db.Uuid
+  currentStageId            String?                   @map("current_stage_id") @db.Uuid
+  outcome                   ApplicationOutcome        @default(NONE)
+  assignedVacancyLocationId String?                   @map("assigned_vacancy_location_id") @db.Uuid
+  appliedAt                 DateTime                  @default(now()) @map("applied_at") @db.Timestamptz(6)
+  notes                     String?
+  createdById               String?                   @map("created_by_id") @db.Uuid
+  createdAt                 DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant                    Tenant?                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  candidate                 Candidate                 @relation(fields: [candidateId], references: [id])
+  jobPosting                JobPosting?               @relation(fields: [jobPostingId], references: [id])
+  vacancy                   Vacancy?                  @relation(fields: [vacancyId], references: [id], onDelete: Restrict)
+  source                    ApplicationSource?        @relation("ApplicationSourceRelation", fields: [sourceId], references: [id])
+  stage                     PipelineStage?            @relation("LegacyApplicationStage", fields: [stageId], references: [id])
+  currentStage              PipelineStage?            @relation("ApplicationCurrentStage", fields: [currentStageId], references: [id])
+  assignedVacancyLocation   VacancyLocation?          @relation(fields: [assignedVacancyLocationId], references: [id], onDelete: SetNull)
+  createdBy                 User?                     @relation("ApplicationCreatedBy", fields: [createdById], references: [id])
+  histories                 ApplicationStageHistory[]
+  interviews                Interview[]
 
   @@unique([candidateId, jobPostingId])
+  @@index([tenantId])
+  @@index([tenantId, vacancyId])
+  @@index([tenantId, candidateId])
+  @@index([tenantId, currentStageId])
+  @@index([tenantId, outcome])
+  @@index([vacancyId])
+  @@index([currentStageId])
+  @@index([assignedVacancyLocationId])
   @@index([jobPostingId, stageId])
   @@index([candidateId])
   @@index([jobPostingId])
@@ -405,6 +423,8 @@ model Tenant {
   dataProvenances       DataProvenance[]
   privacyPolicyVersions PrivacyPolicyVersion[]
   privacyAcknowledgments PrivacyAcknowledgment[]
+  applications          Application[]
+  applicationStageHistories ApplicationStageHistory[]
 
   @@map("tenants")
 }
@@ -524,7 +544,8 @@ model PipelineStage {
   version            PipelineVersion           @relation(fields: [pipelineVersionId], references: [id], onDelete: Cascade)
   fromStageHistories ApplicationStageHistory[] @relation("FromStage")
   toStageHistories   ApplicationStageHistory[] @relation("ToStage")
-  applications       Application[]
+  applications       Application[]             @relation("LegacyApplicationStage")
+  canonicalApplications Application[]          @relation("ApplicationCurrentStage")
   interviews         Interview[]
 
   @@unique([pipelineVersionId, order])
@@ -555,6 +576,7 @@ model Vacancy {
   pipelineVersion   PipelineVersion   @relation(fields: [tenantId, pipelineVersionId], references: [tenantId, id], onDelete: Restrict)
   locations         VacancyLocation[]
   hiringTeamMembers HiringTeamMember[]
+  applications      Application[]
 
   @@unique([tenantId, slug])
   @@unique([tenantId, id])
@@ -578,8 +600,10 @@ model VacancyLocation {
 
   vacancy       Vacancy     @relation(fields: [tenantId, vacancyId, legalEntityId], references: [tenantId, id, legalEntityId], onDelete: Cascade)
   location      Location    @relation(fields: [tenantId, legalEntityId, locationId], references: [tenantId, legalEntityId, id], onDelete: Restrict)
+  applications  Application[]
 
   @@unique([vacancyId, locationId])
+  @@unique([tenantId, vacancyId, id])
   @@index([tenantId])
   @@index([vacancyId])
   @@index([locationId])
@@ -607,17 +631,21 @@ model HiringTeamMember {
 
 model ApplicationStageHistory {
   id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String?        @map("tenant_id") @db.Uuid
   applicationId String         @map("application_id") @db.Uuid
   fromStageId   String?        @map("from_stage_id") @db.Uuid
   toStageId     String         @map("to_stage_id") @db.Uuid
   movedAt       DateTime       @default(now()) @map("moved_at") @db.Timestamptz(6)
   notes         String?
   movedById     String?        @map("moved_by_id") @db.Uuid
+
+  tenant        Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   application   Application    @relation(fields: [applicationId], references: [id])
   fromStage     PipelineStage? @relation("FromStage", fields: [fromStageId], references: [id])
   movedBy       User?          @relation("StageMovedBy", fields: [movedById], references: [id])
   toStage       PipelineStage  @relation("ToStage", fields: [toStageId], references: [id])
 
+  @@index([tenantId])
   @@index([applicationId, movedAt])
   @@index([applicationId])
   @@index([toStageId])
@@ -773,5 +801,15 @@ enum HiringTeamRole {
   INTERVIEWER
 
   @@map("hiring_team_roles")
+}
+
+enum ApplicationOutcome {
+  NONE
+  HIRED
+  REJECTED
+  WITHDRAWN
+  CANCELLED
+
+  @@map("application_outcomes")
 }
 

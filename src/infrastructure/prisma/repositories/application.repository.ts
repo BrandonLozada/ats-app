@@ -13,7 +13,7 @@ export class ApplicationRepository {
     return new ApplicationAggregate(
       data.id,
       data.candidateId,
-      data.jobPostingId,
+      data.jobPostingId!,
       data.stageId,
     );
   }

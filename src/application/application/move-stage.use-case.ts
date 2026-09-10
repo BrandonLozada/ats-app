@@ -41,7 +41,7 @@ export async function moveStageUseCase(input: MoveStageDTO) {
 
   // 2. Validar que pertenece al mismo pipeline a través de la jerarquía real:
   // PipelineStage -> PipelineVersion -> HiringPipeline
-  if (application.jobPosting.pipelineId !== nextStage.version.pipelineId) {
+  if (!application.jobPosting || application.jobPosting.pipelineId !== nextStage.version.pipelineId) {
     throw new Error("Stage does not belong to job pipeline");
   }
 
