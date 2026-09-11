@@ -56,3 +56,18 @@ export type {
 export type { CandidateError } from "./application/candidate/candidate.errors";
 export type { PublicPrivacyPolicy } from "./application/privacy-policy/privacy-policy-public.types";
 export type { PrivacyPolicyResolutionError } from "./application/privacy-policy/privacy-policy-public.errors";
+
+export type {
+  ApplicationOutcome,
+  ApplicationRecord,
+  CreateApplicationInput,
+} from "./application/application/application.types";
+
+export type {
+  ApplicationError,
+  ApplicationErrorCode,
+} from "./application/application/application.errors";
+
+export {
+  isTerminalApplicationOutcome,
+} from "./application/application/application.rules";

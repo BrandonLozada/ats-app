@@ -12,6 +12,7 @@ export {
   getPublicVacancyDetails,
   createCandidate,
   updateCandidate,
+  createApplication,
   resolveCurrentPrivacyPolicy,
 } from "./composition.server";
 
@@ -56,7 +57,14 @@ export type {
   CandidateError,
   PublicPrivacyPolicy,
   PrivacyPolicyResolutionError,
+  ApplicationOutcome,
+  ApplicationRecord,
+  CreateApplicationInput,
+  ApplicationError,
+  ApplicationErrorCode,
 } from "./public";
+
+export { isTerminalApplicationOutcome } from "./public";
 
 
 

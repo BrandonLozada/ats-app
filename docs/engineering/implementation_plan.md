@@ -984,11 +984,12 @@ graph TD
 
 **Task ID:** I6-S6-T04
 **Title:** Application Core Application & Infrastructure Capability
+**Status:** DONE / VERIFIED
 **Risk:** HIGH
 **Depends On:** I6-S6-T03
 **Blocks:** Stage 7
 **Can Run In Parallel With:** None
-**Files / Areas:** `src/modules/recruiting/`
+**Files / Areas:** `src/modules/recruiting/application/application/`, `src/modules/recruiting/infrastructure/prisma-application-repository.ts`, `src/modules/recruiting/composition.server.ts`, `src/modules/recruiting/public.ts`, `src/modules/recruiting/public.server.ts`, `tests/integration/application-capability.integration.test.ts`
 **Objective:** Implement persistence and invariants for canonical Applications.
 **Canonical Required-Write Contract (Prerequisite Rule):**
 - Any canonical Application repository introduced in I6-S6-T04 MUST refuse to persist an Application without:
@@ -998,11 +999,25 @@ graph TD
 - It MUST validate at application/domain boundary that `currentStage` belongs to `Vacancy.pipelineVersion`.
 - The transitional nullable Prisma schema in T03 is solely for legacy coexistence and is **NOT** permission for canonical repository writes to omit these fields.
 **Acceptance Criteria:**
-- `ApplicationRepository` port/adapter.
-- Initial Application creation use case.
-- Terminal-state invariant rules enforced.
-- Active-application precheck query.
-**Validation:** `pnpm test`
+- [x] Pure consumer-owned `ApplicationRepositoryPort` & `PrismaApplicationRepository` adapter (`import "server-only"`).
+- [x] Initial Application creation use case (`createApplication`) governed by `AuthenticatedContext` and `application.create` permission.
+- [x] Candidate & Vacancy resolved strictly within tenant context (`APPLICATION_CANDIDATE_NOT_FOUND`, `APPLICATION_VACANCY_NOT_FOUND`).
+- [x] Vacancy lifecycle eligibility enforced: strictly requires `status === 'PUBLISHED'` (`VACANCY_NOT_ACCEPTING_APPLICATIONS`).
+- [x] Initial stage derived strictly from Vacancy's pinned `PipelineVersion` with `isInitial = true` and `category = APPLIED` (`INITIAL_STAGE_NOT_FOUND`, `PIPELINE_CONFIGURATION_ERROR`).
+- [x] Optional assigned VacancyLocation verified against tenant and vacancy (`VACANCY_LOCATION_NOT_FOUND`). Null permitted.
+- [x] Optional ApplicationSource verified against active catalogue (`APPLICATION_SOURCE_NOT_FOUND`). Null permitted.
+- [x] Dual-layer active duplicate protection: application-level precheck and PostgreSQL partial unique constraint (`applications_active_tenant_candidate_vacancy_key`) mapped to `APPLICATION_ALREADY_ACTIVE`.
+- [x] Exact partial-unique P2002 mapping restricted to exact constraint/index name `applications_active_tenant_candidate_vacancy_key`; broad column-only fallback removed; unrelated P2002 errors never map to duplicate active errors.
+- [x] Unified repository error boundary in `createApplicationUseCase`: all unexpected repository read/write exceptions sanitized to `APPLICATION_REPOSITORY_ERROR` with safe generic messages without leaking connection strings, table names, SQLSTATE, or constraint details. Business null/false outcomes strictly retain their specific domain errors.
+- [x] Atomic initialization: `Application` + initial `ApplicationStageHistory` (`fromStageId = null`, `toStageId = initialStage.id`, `movedById = actorUserId`) within a local Prisma transaction. Rollback verified on stage history failure.
+- [x] Terminal-state invariant rules enforced (`isTerminalApplicationOutcome`, `assertApplicationIsActive` returning pure `APPLICATION_ALREADY_TERMINAL`).
+- [x] Canonical fields strictly populated; legacy fields `jobPostingId = null` and `stageId = null`.
+- [x] Zero schema changes, zero migrations created (`prisma/schema.prisma` unchanged).
+- [x] Client-safe `public.ts` and server-only `public.server.ts` boundaries established.
+- [x] 37 unit tests (6 rules, 21 use-cases including read error sanitization, 10 adapter P2002 mapping), 12 boundary tests, and 23 real PostgreSQL integration tests pass.
+**Validation:** `pnpm db:validate` (Valid), `pnpm db:migrate:status` (10 up to date), `pnpm test` (444 passed across 35 suites), `pnpm test:integration` (231 passed across 16 suites), `pnpm typecheck` (18 baseline errors, 0 regressions), `pnpm lint` (20 baseline errors, 55 warnings, 0 regressions), targeted ESLint clean (0 errors, 0 warnings).
+
+**Stage 6 — Application Core Complete**: All exit criteria achieved (T01-T04 DONE / VERIFIED). Application aggregate can be atomically initialized against Candidate/Vacancy/PipelineStage with strict tenant isolation, canonical currentStage, initial StageHistory, and dual-layer active duplicate protection. Next task: I6-S7-T01.
 
 ---
 
