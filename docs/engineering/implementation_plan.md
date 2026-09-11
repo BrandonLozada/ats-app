@@ -1029,15 +1029,59 @@ graph TD
 
 **Task ID:** I6-S7-T01
 **Title:** ADD TransactionPort and Prisma Adapter
+**Status:** DONE / VERIFIED
 **Risk:** MEDIUM
 **Depends On:** I6-S6-T04
 **Blocks:** I6-S7-T06
 **Can Run In Parallel With:** I6-S7-T02, I6-S7-T03, I6-S7-T04, I6-S7-T05
-**Files / Areas:** `src/platform/transaction/`
-**Objective:** Enable domain logic to orchestrate DB transactions securely.
+**Files / Areas:** `src/platform/transaction/`, `tests/integration/transaction-port.integration.test.ts`
+**Objective:** Enable domain and application orchestration to participate in atomic database transactions without leaking Prisma types or database clients across boundaries.
 **Acceptance Criteria:**
-- `TransactionPort` and adapter implemented. Prisma types do NOT leak to Application.
-**Validation:** `pnpm test`
+- **TransactionPort & Opaque TransactionContext Contract:**
+  - Pure opaque nominal token `TransactionContext = { readonly id: symbol }` (frozen object, zero database/query methods).
+  - Port interface: `TransactionPort.run<T>(work: (ctx: TransactionContext) => Promise<T>): Promise<T>`.
+  - Zero Prisma types, `@prisma/*`, `@/generated/prisma/*`, `PrismaClient`, `TransactionClient`, `PrismaPromise`, SQL strings, or raw queries exposed in application contracts.
+- **Server Infrastructure & Separated Architectural Boundaries:**
+  - `PrismaTransactionAdapter` (`import "server-only"`) uses canonical Prisma singleton from `@/infrastructure/database/prisma.client`. Zero duplicate PrismaClients created.
+  - Platform-private registry: `WeakMap<TransactionContext, Prisma.TransactionClient>` encapsulated strictly within `prisma-transaction-registry.server.ts` (`import "server-only"`). Scoped to callback lifecycle: registered on transaction start, unregistered in `finally` block. Business modules MUST NOT import the registry.
+  - Infrastructure-facing resolver: `prisma-transaction-client.server.ts` (`import "server-only"`) exposes `resolvePrismaClient(ctx?: TransactionContext)` and `InvalidTransactionContextError`:
+    - `undefined` -> returns canonical root `prisma` client.
+    - Active registered `TransactionContext` -> returns bound `Prisma.TransactionClient`.
+    - Expired, unknown, foreign, null, or caller-fabricated context -> throws `InvalidTransactionContextError` (fails closed; never falls back to root `prisma`).
+    - Allowed consumers: `src/modules/*/infrastructure/**` adapters only.
+    - Forbidden consumers: `src/modules/**/application/**`, `src/modules/**/domain/**`, and all `public.ts` files.
+- **Transaction Semantics & Propagation:**
+  - Explicit propagation via optional `tx?: TransactionContext` parameter on repository methods.
+  - Zero `AsyncLocalStorage`, CLS, or ambient/implicit transaction context.
+  - Zero generic Unit of Work methods (`tx.query`, `tx.execute`, `tx.repository`, `tx.save` strictly forbidden).
+  - `Result<T, E>` policy: `TransactionPort` does NOT inspect returned `Result` values; `ok: false` is a normal resolved value and triggers a COMMIT. Rollback occurs strictly on thrown exceptions.
+  - Nested transactions policy: recursive `run()` calls and savepoints are explicitly unsupported; callers must propagate existing context.
+  - Default isolation level (`READ COMMITTED` in PostgreSQL) and timeouts (Prisma defaults) preserved without custom overrides.
+- **Public Platform Boundaries:**
+  - `src/platform/transaction/public.ts` exports pure client-safe types (`TransactionContext`, `TransactionPort`) with zero runtime values or server secrets.
+  - `src/platform/transaction/public.server.ts` (`import "server-only"`) exports ready canonical `transactionPort` singleton. Does NOT export `resolvePrismaClient` or registry functions.
+  - Zero imports from business modules (`recruiting`, `organization`, `identity`) in `src/platform/transaction`.
+- **Persistence Scope:**
+  - `prisma/schema.prisma` changed: NO
+  - Migrations created: NO (10 migrations preserved, schema up to date)
+  - Seeds changed: NO
+- **Tests & Verification:**
+  - 8 unit tests in `src/platform/transaction/transaction.test.ts` verifying opaque frozen context, return preservation, exception propagation, Result<T,E> non-rollback, unregistered/fake context fail-closed, expired context fail-closed, and cleanup.
+  - 11 boundary tests in `src/platform/transaction/transaction.boundary.test.ts` verifying client-safe boundary, zero Prisma imports in public/port contracts, server-only enforcement, public.server exports, zero business module imports, application/domain layer forbidden from resolver/registry/adapter, module infrastructure forbidden from registry/adapter, module public boundaries free of resolver, absence of generic Unit of Work methods, and static/runtime consumability proof of the canonical repository pattern (`resolvePrismaClient(tx)`).
+  - 9 real PostgreSQL integration tests in `tests/integration/transaction-port.integration.test.ts` (namespace `98400000-...`):
+    1. Real PostgreSQL commit test: writes within `run` callback persist upon resolution.
+    2. Real PostgreSQL rollback test: all writes within `run` callback roll back when work throws.
+    3. Multi-table atomicity proof (rollback): writes to `Tenant` and `ApplicationSource` within one context roll back atomically on exception.
+    4. Multi-table atomicity proof (commit): writes to `Tenant` and `ApplicationSource` within one context commit atomically on normal resolution.
+    5. Rollback on DB constraint violation: PostgreSQL unique constraint failure inside transaction rolls back earlier valid writes.
+    6. Context identity: resolves identical client instance within a single `run` callback.
+    7. Expired context safety: captured context fails closed with `InvalidTransactionContextError` outside callback and never falls back to root `prisma`.
+    8. Caller-fabricated context rejection: fabricated context throws `InvalidTransactionContextError`.
+    9. Undefined context: resolves canonical root `prisma`.
+    10. Teardown: deterministic cleanup confirms 0 residual rows in `98400000-...`.
+**Validation:** `pnpm db:validate` (Valid), `pnpm db:migrate:status` (10 up to date), `pnpm test` (472 passed across 38 suites), `pnpm test:integration` (240 passed across 17 suites), `pnpm typecheck` (18 baseline errors, 0 regressions), `pnpm lint` (20 baseline errors, 55 warnings, 0 regressions), targeted ESLint clean (0 errors, 0 warnings).
+
+Stage 7 remains **IN PROGRESS**. Next task: `I6-S7-T02 — ADD AuditLog Capability`.
 
 **Task ID:** I6-S7-T02
 **Title:** ADD AuditLog Capability
